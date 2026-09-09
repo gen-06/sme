@@ -1,7 +1,7 @@
 CREATE TABLE businesses (
     id                    UUID PRIMARY KEY,
     name                  VARCHAR(255) NOT NULL,
-    country               CHAR(2) NOT NULL,
+    country               VARCHAR(2) NOT NULL,
     industry              VARCHAR(255),
     registration_number   VARCHAR(255),
     registration_date     DATE,

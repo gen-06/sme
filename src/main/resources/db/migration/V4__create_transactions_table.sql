@@ -4,7 +4,7 @@ CREATE TABLE transactions (
     business_id         UUID NOT NULL,
     external_reference  VARCHAR(255) NOT NULL,
     amount              NUMERIC(19, 4) NOT NULL,
-    currency            CHAR(3) NOT NULL,
+    currency            VARCHAR(3) NOT NULL,
     transaction_date    TIMESTAMPTZ NOT NULL,
     direction           VARCHAR(10) NOT NULL CHECK (direction IN ('INFLOW', 'OUTFLOW')),
     counterparty        VARCHAR(255),

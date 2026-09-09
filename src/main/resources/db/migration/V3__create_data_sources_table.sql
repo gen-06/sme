@@ -6,7 +6,7 @@ CREATE TABLE data_sources (
     provider            VARCHAR(255),
     connection_status   VARCHAR(20) NOT NULL CHECK (connection_status IN
         ('PENDING', 'CONNECTED', 'ERROR', 'DISCONNECTED')),
-    currency            CHAR(3) NOT NULL,
+    currency            VARCHAR(3) NOT NULL,
     connection_config   JSONB,
     last_synced_at      TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL,

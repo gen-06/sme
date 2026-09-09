@@ -1,0 +1,138 @@
+{
+  "info": {
+    "name": "SME Credit-Scoring Platform",
+    "description": "Demo flow: register a business, connect a mobile-money data source, sync, then read back the score, score history, and transactions. Run as a folder (\"Run collection\") top to bottom — later requests read businessId/dataSourceId from earlier responses via test scripts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api/v1" },
+    { "key": "apiKey", "value": "REPLACE_WITH_SEED_LOGGED_API_KEY" },
+    { "key": "businessId", "value": "" },
+    { "key": "dataSourceId", "value": "" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-Key" },
+      { "key": "value", "value": "{{apiKey}}" },
+      { "key": "in", "value": "header" }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Register business",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/businesses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Nairobi Fresh Produce\",\n  \"country\": \"KE\",\n  \"industry\": \"Retail\",\n  \"registrationNumber\": \"PVT-KE-2024-042\",\n  \"registrationDate\": \"2024-03-01\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('businessId', body.id);",
+              "pm.test('business created', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Add mobile-money data source",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/businesses/{{businessId}}/data-sources",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"adapterType\": \"MOBILE_MONEY\",\n  \"provider\": \"M-PESA\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('dataSourceId', body.id);",
+              "pm.test('data source created', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Trigger sync",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/businesses/{{businessId}}/sync"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('sync succeeded', () => pm.response.to.have.status(200));",
+              "pm.test('transactions inserted', () => pm.response.json().transactionsInserted > 0);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3b. Trigger sync again (idempotency check)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/businesses/{{businessId}}/sync"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('re-sync inserts nothing new', () => pm.response.json().transactionsInserted === 0);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Get latest score",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/businesses/{{businessId}}/score"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('score returned', () => pm.response.to.have.status(200));",
+              "pm.test('has factor breakdown', () => pm.response.json().factors.length > 0);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Get score history",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/businesses/{{businessId}}/score/history"
+      }
+    },
+    {
+      "name": "6. Get transactions",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/businesses/{{businessId}}/transactions?page=0&size=10"
+      }
+    }
+  ]
+}

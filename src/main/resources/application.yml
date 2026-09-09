@@ -2,6 +2,13 @@ spring:
   application:
     name: sme-credit-scoring-platform
 
+  autoconfigure:
+    exclude:
+      # We authenticate via ApiKeyAuthFilter, not Spring Security's default
+      # username/password store — without this exclusion Boot still stands up an
+      # in-memory user with a randomly generated password on every startup.
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
   datasource:
     url: jdbc:postgresql://localhost:5432/credit_scoring
     username: credit_scoring
