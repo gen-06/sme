@@ -1,5 +1,7 @@
 package com.creditscore.platform.identity.business;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,5 +28,13 @@ public class BusinessService {
     public Business getOrThrow(UUID businessId) {
         return businessRepository.findById(businessId)
                 .orElseThrow(() -> new NoSuchElementException("Business not found: " + businessId));
+    }
+
+    public Page<Business> list(Pageable pageable) {
+        return businessRepository.findAll(pageable);
+    }
+
+    public Page<Business> search(String query, Pageable pageable) {
+        return businessRepository.findByNameContainingIgnoreCase(query, pageable);
     }
 }

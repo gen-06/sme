@@ -36,6 +36,17 @@ public class BusinessController {
         return ResponseEntity.status(HttpStatus.CREATED).body(BusinessResponse.from(business));
     }
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('BUSINESS_WRITE')")
+    public ResponseEntity<org.springframework.data.domain.Page<BusinessResponse>> list(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
+            org.springframework.data.domain.Pageable pageable) {
+        var page = (search == null || search.isBlank())
+                ? businessService.list(pageable)
+                : businessService.search(search, pageable);
+        return ResponseEntity.ok(page.map(BusinessResponse::from));
+    }
+
     @GetMapping("/{businessId}")
     @PreAuthorize("hasAuthority('BUSINESS_WRITE')")
     public ResponseEntity<BusinessResponse> get(@PathVariable UUID businessId) {
