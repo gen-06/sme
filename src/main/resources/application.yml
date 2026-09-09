@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: sme-credit-scoring-platform
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/credit_scoring
+    username: credit_scoring
+    password: credit_scoring_dev
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  batch:
+    jdbc:
+      initialize-schema: never
+    job:
+      enabled: false
+
+app:
+  ingestion:
+    mock-mobile-money:
+      window-months: 6
+      monthly-transaction-count-min: 8
+      monthly-transaction-count-max: 40
+      monthly-inflow-min: 50000
+      monthly-inflow-max: 400000
+      growth-bias: 0.03
+      failure-rate: 0.06
+      guaranteed-gap-month: true
+
+  scoring:
+    active-version: rule-based-v1
+    rule-based-v1:
+      weights:
+        transaction-volume: 0.30
+        consistency: 0.30
+        growth-trend: 0.25
+        missed-payment-signal: 0.15
+
+  batch:
+    sync-cron: "0 0 */6 * * *"
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.creditscore.platform: INFO
