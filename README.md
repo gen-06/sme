@@ -54,11 +54,14 @@ Swagger UI (no auth required): http://localhost:8080/swagger-ui.html
 | Method | Path                                      | Scope required     |
 |--------|--------------------------------------------|---------------------|
 | POST   | `/api/v1/businesses`                        | `BUSINESS_WRITE`     |
+| GET    | `/api/v1/businesses`                        | `BUSINESS_WRITE`     |
+| GET    | `/api/v1/businesses/{id}`                   | `BUSINESS_WRITE`     |
 | POST   | `/api/v1/businesses/{id}/data-sources`      | `DATA_SOURCE_WRITE`  |
 | POST   | `/api/v1/businesses/{id}/sync`              | `SYNC_TRIGGER`       |
 | GET    | `/api/v1/businesses/{id}/score`             | `SCORE_READ`         |
 | GET    | `/api/v1/businesses/{id}/score/history`     | `SCORE_READ`         |
 | GET    | `/api/v1/businesses/{id}/transactions`      | `TRANSACTION_READ`   |
+| GET    | `/api/v1/usage/summary`                     | (none — any authenticated consumer) |
 
 Auth: `X-API-Key: <key>` header. The seed consumer holds all scopes.
 

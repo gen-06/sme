@@ -40,7 +40,7 @@ public class BusinessController {
     @PreAuthorize("hasAuthority('BUSINESS_WRITE')")
     public ResponseEntity<org.springframework.data.domain.Page<BusinessResponse>> list(
             @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
-            org.springframework.data.domain.Pageable pageable) {
+            @org.springframework.data.web.PageableDefault(sort = "name") org.springframework.data.domain.Pageable pageable) {
         var page = (search == null || search.isBlank())
                 ? businessService.list(pageable)
                 : businessService.search(search, pageable);

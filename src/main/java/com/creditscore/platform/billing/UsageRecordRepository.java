@@ -13,7 +13,6 @@ public interface UsageRecordRepository extends JpaRepository<UsageRecord, UUID> 
 
     List<UsageRecord> findTop20ByConsumerIdOrderByCalledAtDesc(UUID consumerId);
 
-    @Query("select u.endpoint as endpoint, count(u) as callCount from UsageRecord u "
-            + "where u.consumerId = :consumerId group by u.endpoint order by count(u) desc")
-    List<EndpointUsageCount> countByEndpointForConsumer(@Param("consumerId") UUID consumerId);
+    @Query("select u.endpoint from UsageRecord u where u.consumerId = :consumerId")
+    List<String> findEndpointsByConsumerId(@Param("consumerId") UUID consumerId);
 }
