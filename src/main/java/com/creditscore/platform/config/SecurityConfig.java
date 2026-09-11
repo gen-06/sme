@@ -4,6 +4,7 @@ import com.creditscore.platform.billing.UsageMeter;
 import com.creditscore.platform.identity.auth.AdminTokenFilter;
 import com.creditscore.platform.identity.auth.ApiKeyAuthFilter;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2ConsumerAuthenticationConverter;
+import com.creditscore.platform.identity.auth.oauth2.OAuth2UsageMeteringFilter;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -97,12 +98,15 @@ public class SecurityConfig {
                                                UsageMeter usageMeter, JwtDecoder jwtDecoder) throws Exception {
         ApiKeyAuthFilter apiKeyAuthFilter =
                 new ApiKeyAuthFilter(consumerRepository, new TransactionTemplate(transactionManager), usageMeter);
+        OAuth2UsageMeteringFilter oauth2UsageMeteringFilter = new OAuth2UsageMeteringFilter(consumerRepository,
+                usageMeter, new TransactionTemplate(transactionManager));
 
         http
                 .securityMatcher("/api/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(oauth2UsageMeteringFilter, ApiKeyAuthFilter.class)
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .decoder(jwtDecoder)
                         .jwtAuthenticationConverter(new OAuth2ConsumerAuthenticationConverter(consumerRepository))))

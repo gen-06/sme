@@ -2,6 +2,7 @@ package com.creditscore.platform.identity.auth.oauth2;
 
 import com.creditscore.platform.identity.consumer.Consumer;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
+import com.creditscore.platform.identity.consumer.ConsumerStatus;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -52,6 +53,16 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
 
     private RegisteredClient toRegisteredClient(Consumer consumer) {
         if (consumer.getOauthClientId() == null || consumer.getOauthClientSecretHash() == null) {
+            return null;
+        }
+        // A suspended/revoked Consumer must stop minting new tokens immediately (per
+        // the design spec's "known MVP limitations"). Spring Authorization Server
+        // calls findByClientId to authenticate the client during /oauth2/token, so
+        // returning null here — the same signal used for "no oauth credentials" —
+        // is what actually blocks new issuance. Already-issued tokens are validated
+        // by OAuth2ConsumerAuthenticationConverter, which deliberately does not
+        // re-check status, so they intentionally remain valid until they expire.
+        if (consumer.getStatus() != ConsumerStatus.ACTIVE) {
             return null;
         }
         return RegisteredClient.withId(consumer.getId().toString())

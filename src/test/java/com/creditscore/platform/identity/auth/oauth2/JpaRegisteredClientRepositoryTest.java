@@ -3,6 +3,7 @@ package com.creditscore.platform.identity.auth.oauth2;
 import com.creditscore.platform.identity.consumer.Consumer;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
 import com.creditscore.platform.identity.consumer.ConsumerScope;
+import com.creditscore.platform.identity.consumer.ConsumerStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -45,6 +46,32 @@ class JpaRegisteredClientRepositoryTest {
         when(consumerRepository.findByOauthClientId("missing")).thenReturn(Optional.empty());
 
         assertThat(repository.findByClientId("missing")).isNull();
+    }
+
+    @Test
+    void findByClientIdReturnsNullForSuspendedConsumer() {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        ReflectionTestUtils.setField(consumer, "id", consumerId);
+        consumer.setOauthClientId("client_suspended");
+        consumer.setOauthClientSecretHash("{bcrypt}hashed");
+        ReflectionTestUtils.setField(consumer, "status", ConsumerStatus.SUSPENDED);
+        when(consumerRepository.findByOauthClientId("client_suspended")).thenReturn(Optional.of(consumer));
+
+        assertThat(repository.findByClientId("client_suspended")).isNull();
+    }
+
+    @Test
+    void findByClientIdReturnsNullForRevokedConsumer() {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        ReflectionTestUtils.setField(consumer, "id", consumerId);
+        consumer.setOauthClientId("client_revoked");
+        consumer.setOauthClientSecretHash("{bcrypt}hashed");
+        ReflectionTestUtils.setField(consumer, "status", ConsumerStatus.REVOKED);
+        when(consumerRepository.findByOauthClientId("client_revoked")).thenReturn(Optional.of(consumer));
+
+        assertThat(repository.findByClientId("client_revoked")).isNull();
     }
 
     @Test
