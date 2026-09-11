@@ -61,6 +61,9 @@ app:
     # this grant issues no refresh token and the platform has no revocation endpoint, so
     # natural expiry is the only way an issued token stops working.
     access-token-ttl-minutes: 60
+    # Every hour at :30 — offset from app.batch.sync-cron (every 6 hours on the hour) so
+    # the two scheduled jobs don't contend for the same moment.
+    authorization-cleanup-cron: "0 30 * * * *"
 
   admin:
     # Local-dev default matches this project's existing low-ceremony pattern (the
