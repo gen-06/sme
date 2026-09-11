@@ -8,4 +8,6 @@ import java.util.UUID;
 public interface ConsumerRepository extends JpaRepository<Consumer, UUID> {
 
     Optional<Consumer> findByApiKeyHash(String apiKeyHash);
+
+    Optional<Consumer> findByOauthClientId(String oauthClientId);
 }

@@ -100,4 +100,29 @@ public class Consumer extends AuditableEntity {
     public UUID getConsumerId() {
         return getId();
     }
+
+    public static Consumer forOAuth2Client(String name, String contactEmail, Set<ConsumerScope> scopes) {
+        Consumer consumer = new Consumer();
+        consumer.name = name;
+        consumer.contactEmail = contactEmail;
+        consumer.status = ConsumerStatus.ACTIVE;
+        consumer.scopes = new HashSet<>(scopes);
+        return consumer;
+    }
+
+    public String getOauthClientId() {
+        return oauthClientId;
+    }
+
+    public void setOauthClientId(String oauthClientId) {
+        this.oauthClientId = oauthClientId;
+    }
+
+    public String getOauthClientSecretHash() {
+        return oauthClientSecretHash;
+    }
+
+    public void setOauthClientSecretHash(String oauthClientSecretHash) {
+        this.oauthClientSecretHash = oauthClientSecretHash;
+    }
 }
