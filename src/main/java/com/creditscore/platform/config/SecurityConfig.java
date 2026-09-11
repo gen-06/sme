@@ -4,12 +4,10 @@ import com.creditscore.platform.billing.UsageMeter;
 import com.creditscore.platform.identity.auth.AdminTokenFilter;
 import com.creditscore.platform.identity.auth.ApiKeyAuthFilter;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2ConsumerAuthenticationConverter;
+import com.creditscore.platform.identity.auth.oauth2.OAuth2SigningKeyService;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2UsageMeteringFilter;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
-import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
@@ -35,7 +33,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
-import java.util.UUID;
 
 @Configuration
 @EnableWebSecurity
@@ -57,11 +54,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JWKSource<SecurityContext> jwkSource() throws JOSEException {
-        RSAKey rsaKey = new RSAKeyGenerator(2048)
-                .keyID(UUID.randomUUID().toString())
-                .generate();
-        JWKSet jwkSet = new JWKSet(rsaKey);
+    public JWKSource<SecurityContext> jwkSource(OAuth2SigningKeyService signingKeyService) {
+        JWKSet jwkSet = new JWKSet(signingKeyService.getOrCreateSigningKey());
         return new ImmutableJWKSet<>(jwkSet);
     }
 
