@@ -1,8 +1,13 @@
 /**
- * Reserved for the OAuth2 client-credentials flow that will replace API-key auth
- * once the MVP is validated (see the product brief's "path from MVP to production").
- * The swap point is {@code SecurityConfig}: controllers reference only
- * {@code Authentication}, never the raw API key, so replacing {@code ApiKeyAuthFilter}
- * with {@code .oauth2ResourceServer(...)} here will not require any controller changes.
+ * OAuth2 client-credentials support, coexisting with API-key auth (see
+ * {@code com.creditscore.platform.identity.auth.ApiKeyAuthFilter}) rather than
+ * replacing it. {@link com.creditscore.platform.identity.auth.oauth2.JpaRegisteredClientRepository}
+ * adapts {@code Consumer} rows into Spring Authorization Server's {@code RegisteredClient}
+ * — there is no separate client table. Token issuance stamps a {@code consumer_id}
+ * claim ({@link com.creditscore.platform.identity.auth.oauth2.OAuth2ConsumerTokenCustomizer});
+ * {@link com.creditscore.platform.identity.auth.oauth2.OAuth2ConsumerAuthenticationConverter}
+ * reads it back on the resource-server side to build the same principal shape
+ * {@code ApiKeyAuthenticationToken} uses. See
+ * {@code docs/superpowers/specs/2026-09-11-oauth2-client-credentials-design.md}.
  */
 package com.creditscore.platform.identity.auth.oauth2;

@@ -32,7 +32,7 @@ as independently deployable/versioned modules), it's a mechanical "move package,
 |-----------------------------|---------------------------------------------------------------|
 | New data source markets    | New `ingestion.<source>` package implementing `DataAdapter`  |
 | ML scoring                 | New `scoring.ml.MlScoringEngineV1` implementing `ScoringEngine`, flip `app.scoring.active-version` |
-| OAuth2 client-credentials  | Replace `ApiKeyAuthFilter` in `SecurityConfig`; `identity.auth.oauth2` stub package |
+| OAuth2 client-credentials  | Built — `identity.auth.oauth2`; coexists with API-key auth, see README |
 | Usage-based billing/pricing| `billing.UsageRecord` already captures raw usage; add pricing logic on top |
 | Redis score caching        | `docker-compose.yml` has a commented-out `redis` service ready to enable |
 

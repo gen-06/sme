@@ -36,6 +36,7 @@ services:
       SPRING_DATASOURCE_USERNAME: credit_scoring
       SPRING_DATASOURCE_PASSWORD: credit_scoring_dev
       SPRING_PROFILES_ACTIVE: seed
+      PLATFORM_ADMIN_TOKEN: local-dev-admin-token
     ports:
       - "8080:8080"
     profiles: ["full"]

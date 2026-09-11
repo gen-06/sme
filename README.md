@@ -65,6 +65,31 @@ Swagger UI (no auth required): http://localhost:8080/swagger-ui.html
 
 Auth: `X-API-Key: <key>` header. The seed consumer holds all scopes.
 
+### OAuth2 client-credentials (coexists with API keys)
+
+Provision a client (requires `PLATFORM_ADMIN_TOKEN`, defaults to `local-dev-admin-token`
+locally):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/admin/consumers \
+  -H 'Content-Type: application/json' \
+  -H 'X-Platform-Admin-Token: local-dev-admin-token' \
+  -d '{"name":"Acme Lender","contactEmail":"ops@acme.test","scopes":["SCORE_READ"]}'
+```
+
+Get a token (client secret is HTTP Basic, matching the `client_credentials` grant):
+
+```bash
+curl -u "$CLIENT_ID:$CLIENT_SECRET" -d 'grant_type=client_credentials&scope=SCORE_READ' \
+  http://localhost:8080/oauth2/token
+```
+
+Call any existing endpoint with `Authorization: Bearer <access_token>` instead of
+`X-API-Key` — every scope-based check behaves identically either way. Access tokens
+expire after 1 hour (no refresh tokens for this grant type — re-authenticate with the
+client secret). Full design rationale:
+`docs/superpowers/specs/2026-09-11-oauth2-client-credentials-design.md`.
+
 ## Tests
 
 ```bash
