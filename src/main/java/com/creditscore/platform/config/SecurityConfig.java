@@ -47,7 +47,7 @@ public class SecurityConfig {
      * with {@link AuthorizationServerSettings}' defaults for the token, JWK set and
      * metadata endpoints.
      */
-    private static final String[] SUPPORTED_AUTHORIZATION_SERVER_ENDPOINTS = {
+    static final String[] SUPPORTED_AUTHORIZATION_SERVER_ENDPOINTS = {
             "/oauth2/token", "/oauth2/jwks", "/.well-known/oauth-authorization-server"
     };
 

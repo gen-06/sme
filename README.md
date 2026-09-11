@@ -73,7 +73,9 @@ Swagger UI (no auth required): http://localhost:8080/swagger-ui.html
 | GET    | `/api/v1/businesses/{id}/transactions`      | `TRANSACTION_READ`   |
 | GET    | `/api/v1/usage/summary`                     | (none — any authenticated consumer) |
 
-Auth: `X-API-Key: <key>` header. The seed consumer holds all scopes.
+Auth: `X-API-Key: <key>` header, or `Authorization: Bearer <access_token>` — see
+[OAuth2 client-credentials](#oauth2-client-credentials-coexists-with-api-keys) below.
+The seed consumer holds all scopes.
 
 ### OAuth2 client-credentials (coexists with API keys)
 
@@ -148,7 +150,11 @@ this runs as more than a single production instance.
 
 Covers: mock-adapter determinism (same `DataSource` → identical synthetic history) and
 its since-filter/gap-month invariants, mobile-money → `Transaction` normalization
-mapping, and each rule-based scoring rule in isolation.
+mapping, each rule-based scoring rule in isolation, and the OAuth2 auth layer —
+`Consumer`'s OAuth2 factory/accessors, client provisioning and secret hashing, the JWT
+claim customizer/converter's scope-mapping and consumer-lookup logic,
+`JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation, and
+`AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior.
 
 ## Full containerized run
 

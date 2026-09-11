@@ -55,9 +55,9 @@ version of this list.
 | No client-secret rotation flow | The secret is shown once at provisioning; replacing it means provisioning a new consumer | Zero-downtime credential rotation |
 | Spring Authorization Server's default in-memory `OAuth2AuthorizationService` retains one entry per issued token, with no eviction | Heap grows with every token issued until restart | A long-lived single instance, and any multi-instance deployment |
 
-The last two rows bound each other today: the in-memory authorization store only grows
-until the next restart, and that same restart is what invalidates every key. Persisting
-one without the other would be a partial fix — a persisted
+The first and last rows bound each other today: the in-memory authorization store only
+grows until the next restart, and that same restart is what invalidates every key.
+Persisting one without the other would be a partial fix — a persisted
 `OAuth2AuthorizationService` is only useful alongside a persisted signing key.
 
 ## Scoring model versioning
