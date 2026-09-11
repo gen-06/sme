@@ -28,7 +28,12 @@ public class AdminTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String presentedToken = request.getHeader(ADMIN_TOKEN_HEADER);
-        if (presentedToken != null && constantTimeEquals(presentedToken, expectedToken)) {
+        // A blank presented token is rejected before it ever reaches constantTimeEquals:
+        // MessageDigest.isEqual returns true for two zero-length arrays, so an empty
+        // header would otherwise authenticate against an empty/blank configured token
+        // (a plausible env-var injection mistake).
+        if (presentedToken != null && !presentedToken.isBlank()
+                && constantTimeEquals(presentedToken, expectedToken)) {
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                     "platform-admin", null, List.of(new SimpleGrantedAuthority("PLATFORM_ADMIN"))));
         }
