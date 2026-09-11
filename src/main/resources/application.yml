@@ -56,6 +56,12 @@ app:
   batch:
     sync-cron: "0 0 */6 * * *"
 
+  oauth2:
+    # Access-token lifetime for the client_credentials grant. Kept deliberately short:
+    # this grant issues no refresh token and the platform has no revocation endpoint, so
+    # natural expiry is the only way an issued token stops working.
+    access-token-ttl-minutes: 60
+
   admin:
     # Local-dev default matches this project's existing low-ceremony pattern (the
     # demo API key is likewise just logged at startup, not console-issued). Override

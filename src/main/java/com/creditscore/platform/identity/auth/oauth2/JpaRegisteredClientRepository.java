@@ -3,6 +3,7 @@ package com.creditscore.platform.identity.auth.oauth2;
 import com.creditscore.platform.identity.consumer.Consumer;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
 import com.creditscore.platform.identity.consumer.ConsumerStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -26,15 +28,19 @@ import java.util.UUID;
 public class JpaRegisteredClientRepository implements RegisteredClientRepository {
 
     private final ConsumerRepository consumerRepository;
+    private final Duration accessTokenTimeToLive;
 
-    public JpaRegisteredClientRepository(ConsumerRepository consumerRepository) {
+    public JpaRegisteredClientRepository(ConsumerRepository consumerRepository,
+                                          @Value("${app.oauth2.access-token-ttl-minutes}") long accessTokenTtlMinutes) {
         this.consumerRepository = consumerRepository;
+        this.accessTokenTimeToLive = Duration.ofMinutes(accessTokenTtlMinutes);
     }
 
     @Override
     @Transactional
     public void save(RegisteredClient registeredClient) {
-        Consumer consumer = consumerRepository.findById(UUID.fromString(registeredClient.getId()))
+        Consumer consumer = parseConsumerId(registeredClient.getId())
+                .flatMap(consumerRepository::findById)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No consumer for registered client id: " + registeredClient.getId()));
         consumer.setOauthClientId(registeredClient.getClientId());
@@ -43,7 +49,11 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
 
     @Override
     public RegisteredClient findById(String id) {
-        return consumerRepository.findById(UUID.fromString(id)).map(this::toRegisteredClient).orElse(null);
+        // RegisteredClient ids are always a Consumer's own UUID, so a malformed id can only
+        // mean "no such client". Collapsing the parse failure into the interface's existing
+        // not-found contract keeps an IllegalArgumentException from escaping as a 500.
+        return parseConsumerId(id).flatMap(consumerRepository::findById)
+                .map(this::toRegisteredClient).orElse(null);
     }
 
     @Override
@@ -72,8 +82,19 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scopes(scopes -> consumer.getScopes().forEach(scope -> scopes.add(scope.name())))
                 .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofHours(1))
+                        .accessTokenTimeToLive(this.accessTokenTimeToLive)
                         .build())
                 .build();
+    }
+
+    private static Optional<UUID> parseConsumerId(String id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(id));
+        } catch (IllegalArgumentException notAUuid) {
+            return Optional.empty();
+        }
     }
 }

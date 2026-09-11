@@ -20,7 +20,7 @@ import static org.mockito.Mockito.when;
 class JpaRegisteredClientRepositoryTest {
 
     private final ConsumerRepository consumerRepository = mock(ConsumerRepository.class);
-    private final JpaRegisteredClientRepository repository = new JpaRegisteredClientRepository(consumerRepository);
+    private final JpaRegisteredClientRepository repository = new JpaRegisteredClientRepository(consumerRepository, 60);
 
     @Test
     void findByClientIdBuildsAClientCredentialsRegisteredClient() {

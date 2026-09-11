@@ -148,7 +148,9 @@ two chains is undefined/incorrect. No existing chain in this codebase has needed
   server-side once issued (no `OAuth2AuthorizationService` persistence in this MVP —
   using Spring Authorization Server's default in-memory service is sufficient since we
   don't need to track/revoke). Mitigated by a short access-token TTL (recommend 1 hour,
-  configurable via `AuthorizationServerSettings`). A suspended `Consumer`
+  configurable via `app.oauth2.access-token-ttl-minutes`, which is applied through the
+  `RegisteredClient`'s `TokenSettings` — not `AuthorizationServerSettings`, which only
+  carries issuer/endpoint URIs). A suspended `Consumer`
   (`ConsumerStatus.SUSPENDED`) stops being able to mint *new* tokens immediately, but an
   already-issued token already in a caller's hands stays valid until it naturally
   expires. Acceptable for MVP; a future pass could add per-request status re-checks

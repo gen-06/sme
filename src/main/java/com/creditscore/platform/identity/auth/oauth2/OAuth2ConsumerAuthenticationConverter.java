@@ -41,7 +41,19 @@ public class OAuth2ConsumerAuthenticationConverter implements Converter<Jwt, Abs
             throw new BadCredentialsException("Token is missing the consumer_id claim");
         }
 
-        Consumer consumer = consumerRepository.findById(UUID.fromString(consumerId))
+        UUID parsedConsumerId;
+        try {
+            parsedConsumerId = UUID.fromString(consumerId);
+        } catch (IllegalArgumentException notAUuid) {
+            // Unreachable today (the claim is signed by this app's own key and always
+            // written from consumer.getId().toString()), but IllegalArgumentException is not
+            // an AuthenticationException, so it would escape as an uncaught 500 rather than
+            // a 401. Translating it keeps all three "unresolvable identity" paths in this
+            // class failing closed the same way.
+            throw new BadCredentialsException("Token carries a malformed consumer_id claim: " + consumerId);
+        }
+
+        Consumer consumer = consumerRepository.findById(parsedConsumerId)
                 .orElseThrow(() -> new BadCredentialsException("Token references an unknown consumer: " + consumerId));
 
         return new OAuth2ConsumerAuthenticationToken(consumer, authorities);
