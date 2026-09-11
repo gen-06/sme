@@ -5,6 +5,7 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,7 +19,29 @@ import static org.mockito.Mockito.when;
 class OAuth2SigningKeyServiceTest {
 
     private final OAuth2SigningKeyRepository repository = mock(OAuth2SigningKeyRepository.class);
-    private final OAuth2SigningKeyService service = new OAuth2SigningKeyService(repository);
+    private final OAuth2SigningKeyService service = selfInjected(repository);
+
+    /**
+     * Production wiring resolves the {@code self} constructor parameter to a
+     * {@code @Lazy} Spring AOP proxy of this same bean, so that calls like
+     * {@code self::createAndPersist} actually go through the proxy and pick up
+     * {@code @Transactional}. There's no Spring context in this plain unit test, so
+     * this wires {@code self} to point back at the same instance directly — enough to
+     * exercise the business logic these tests check, though (as noted in the class
+     * javadoc) no mocked-repository test can verify the AOP/transactional wiring
+     * itself.
+     */
+    private static OAuth2SigningKeyService selfInjected(OAuth2SigningKeyRepository repository) {
+        try {
+            OAuth2SigningKeyService service = new OAuth2SigningKeyService(repository, null);
+            Field selfField = OAuth2SigningKeyService.class.getDeclaredField("self");
+            selfField.setAccessible(true);
+            selfField.set(service, service);
+            return service;
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @Test
     void returnsTheExistingKeyWhenOneIsAlreadyPersisted() throws Exception {
@@ -71,5 +94,13 @@ class OAuth2SigningKeyServiceTest {
         callback.invoke(key);
 
         assertThat(key.isNew()).isFalse();
+    }
+
+    @Test
+    void markNotNewIsWiredToBothJpaLifecycleCallbacks() throws Exception {
+        var callback = OAuth2SigningKey.class.getDeclaredMethod("markNotNew");
+
+        assertThat(callback.isAnnotationPresent(jakarta.persistence.PostLoad.class)).isTrue();
+        assertThat(callback.isAnnotationPresent(jakarta.persistence.PostPersist.class)).isTrue();
     }
 }
