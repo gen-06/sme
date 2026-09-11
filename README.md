@@ -112,16 +112,8 @@ client-credentials grant.
 
 ## Known limitations
 
-These are accepted MVP trade-offs, not oversights. Each needs to be addressed before
-this runs as more than a single production instance.
+These are accepted MVP trade-offs, not oversights.
 
-- **The RSA signing key is generated fresh on every application start.** It is held in
-  memory only (`SecurityConfig.jwkSource`), never persisted. Every restart therefore
-  invalidates *all* outstanding OAuth2 access tokens immediately — not just at their
-  natural 1-hour expiry — and changes the key set served at `/oauth2/jwks`. Clients must
-  be able to re-authenticate on an unexpected `401`. A persisted (or externally managed)
-  key, with rotation and overlap, is required before multi-instance deployment: two
-  instances today would sign with different keys and reject each other's tokens.
 - **No token revocation before natural expiry.** There is no `/oauth2/revoke` endpoint.
   Suspending or revoking a `Consumer` stops it minting *new* tokens immediately
   (`JpaRegisteredClientRepository` returns `null` for a non-`ACTIVE` consumer), but a
@@ -130,14 +122,13 @@ this runs as more than a single production instance.
 - **No client-secret rotation flow.** A secret is shown exactly once, at provisioning.
   Replacing a compromised one means provisioning a new consumer; there is no way to
   issue a second secret and retire the first without downtime for that client.
-- **OAuth2 authorization state grows without bound.** Spring Authorization Server's
-  default in-memory `OAuth2AuthorizationService` retains one entry per issued token, with
-  no eviction or TTL-based cleanup, so heap usage grows with every token issued until the
-  process restarts. This is acceptable for a single-instance MVP precisely because it is
-  bounded by the same restart that invalidates the signing key — the two limitations
-  bound each other in practice today. A persisted, bounded implementation
-  (`JdbcOAuth2AuthorizationService` or equivalent) is required before running multiple
-  instances, or a single long-lived instance, in production.
+- **No signing-key rotation.** The RSA key is persisted (`oauth2_signing_keys`,
+  generated once and reused indefinitely across restarts and instances — see
+  `docs/superpowers/specs/2026-09-11-oauth2-persistence-design.md`), which solved the
+  "every restart invalidates every token" and "two instances reject each other's
+  tokens" problems. There is still no mechanism to rotate to a new key while
+  continuing to accept tokens signed by an old one: replacing the stored key today
+  invalidates every outstanding token at once, the same way a restart used to.
 - **Usage is metered per credential, not deduplicated across them.** A request that
   presents both `X-API-Key` and a `Bearer` token is recorded by both metering paths. No
   product decision has been made about which credential should win for billing.
