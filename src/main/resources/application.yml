@@ -56,6 +56,12 @@ app:
   batch:
     sync-cron: "0 0 */6 * * *"
 
+  admin:
+    # Local-dev default matches this project's existing low-ceremony pattern (the
+    # demo API key is likewise just logged at startup, not console-issued). Override
+    # via the PLATFORM_ADMIN_TOKEN env var for anything beyond a laptop.
+    platform-admin-token: ${PLATFORM_ADMIN_TOKEN:local-dev-admin-token}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
