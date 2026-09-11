@@ -100,8 +100,7 @@ Call any existing endpoint with `Authorization: Bearer <access_token>` instead o
 `X-API-Key` — every scope-based check behaves identically either way. Access tokens
 expire after 1 hour by default (tunable via `app.oauth2.access-token-ttl-minutes`); there
 are no refresh tokens for this grant type, so re-authenticate with the client secret.
-Note that a restart also invalidates every outstanding token — see
-[Known limitations](#known-limitations). Full design rationale:
+Full design rationale:
 `docs/superpowers/specs/2026-09-11-oauth2-client-credentials-design.md`.
 
 Only three Authorization Server endpoints are exposed: `/oauth2/token`, `/oauth2/jwks`
