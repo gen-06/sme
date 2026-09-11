@@ -6,9 +6,11 @@ and turns it into a standardized creditworthiness signal, served to lenders/fint
 via a B2B REST API. See `ARCHITECTURE.md` for package boundaries and extension points.
 
 This is the MVP slice: one data source (a realistic mock mobile-money adapter),
-normalization, a rule-based scoring engine, and the full API-key-authenticated REST
-surface. Everything else in the product brief (more adapters, ML scoring, OAuth2,
-billing, dashboards) has an explicit, documented extension point already in place.
+normalization, a rule-based scoring engine, and the full REST surface, authenticated by
+API key or OAuth2 client credentials. Everything else in the product brief (more
+adapters, ML scoring, billing, dashboards) has an explicit, documented extension point
+already in place. See [Known limitations](#known-limitations) for what the auth layer
+does *not* do yet.
 
 ## Requirements
 
@@ -21,10 +23,18 @@ billing, dashboards) has an explicit, documented extension point already in plac
 ```bash
 docker compose up -d postgres
 
-# Seed data is required locally: Consumer/API-key provisioning is seed-only in this
-# pass (no admin endpoint yet), so without the seed profile every endpoint 401s.
+# Seed data provisions the demo API-key consumer (and the demo businesses/scores), so
+# without the seed profile there is no API key to call anything with. Additional
+# consumers can be provisioned at runtime through POST /api/v1/admin/consumers, but
+# that endpoint issues OAuth2 client credentials only — it does not mint API keys.
 SPRING_PROFILES_ACTIVE=seed ./mvnw spring-boot:run
 ```
+
+The `seed` profile is also what allows `app.admin.platform-admin-token` to keep its
+published local-dev default. Outside that profile the application **refuses to start**
+unless `PLATFORM_ADMIN_TOKEN` is set to a real secret — the default is printed in this
+file and in `docker-compose.yml`, so a deployment that silently kept it would leave the
+admin endpoint open to anyone who has read them.
 
 On startup, the log prints a demo API key (shown once) and three business IDs — two
 pre-synced with a computed score (Kenya, Nigeria), one left unsynced (Ghana) to
@@ -86,9 +96,49 @@ curl -u "$CLIENT_ID:$CLIENT_SECRET" -d 'grant_type=client_credentials&scope=SCOR
 
 Call any existing endpoint with `Authorization: Bearer <access_token>` instead of
 `X-API-Key` — every scope-based check behaves identically either way. Access tokens
-expire after 1 hour (no refresh tokens for this grant type — re-authenticate with the
-client secret). Full design rationale:
+expire after 1 hour by default (tunable via `app.oauth2.access-token-ttl-minutes`); there
+are no refresh tokens for this grant type, so re-authenticate with the client secret.
+Note that a restart also invalidates every outstanding token — see
+[Known limitations](#known-limitations). Full design rationale:
 `docs/superpowers/specs/2026-09-11-oauth2-client-credentials-design.md`.
+
+Only three Authorization Server endpoints are exposed: `/oauth2/token`, `/oauth2/jwks`
+and `/.well-known/oauth-authorization-server`. The rest of Spring Authorization Server's
+surface (`/oauth2/authorize`, `/oauth2/revoke`, `/oauth2/introspect`, the device-grant
+endpoints) is deliberately closed off, because this platform implements only the
+client-credentials grant.
+
+## Known limitations
+
+These are accepted MVP trade-offs, not oversights. Each needs to be addressed before
+this runs as more than a single production instance.
+
+- **The RSA signing key is generated fresh on every application start.** It is held in
+  memory only (`SecurityConfig.jwkSource`), never persisted. Every restart therefore
+  invalidates *all* outstanding OAuth2 access tokens immediately — not just at their
+  natural 1-hour expiry — and changes the key set served at `/oauth2/jwks`. Clients must
+  be able to re-authenticate on an unexpected `401`. A persisted (or externally managed)
+  key, with rotation and overlap, is required before multi-instance deployment: two
+  instances today would sign with different keys and reject each other's tokens.
+- **No token revocation before natural expiry.** There is no `/oauth2/revoke` endpoint.
+  Suspending or revoking a `Consumer` stops it minting *new* tokens immediately
+  (`JpaRegisteredClientRepository` returns `null` for a non-`ACTIVE` consumer), but a
+  token already in a caller's hands stays valid until it expires. The access-token TTL
+  (`app.oauth2.access-token-ttl-minutes`) is the only bound on that window.
+- **No client-secret rotation flow.** A secret is shown exactly once, at provisioning.
+  Replacing a compromised one means provisioning a new consumer; there is no way to
+  issue a second secret and retire the first without downtime for that client.
+- **OAuth2 authorization state grows without bound.** Spring Authorization Server's
+  default in-memory `OAuth2AuthorizationService` retains one entry per issued token, with
+  no eviction or TTL-based cleanup, so heap usage grows with every token issued until the
+  process restarts. This is acceptable for a single-instance MVP precisely because it is
+  bounded by the same restart that invalidates the signing key — the two limitations
+  bound each other in practice today. A persisted, bounded implementation
+  (`JdbcOAuth2AuthorizationService` or equivalent) is required before running multiple
+  instances, or a single long-lived instance, in production.
+- **Usage is metered per credential, not deduplicated across them.** A request that
+  presents both `X-API-Key` and a `Bearer` token is recorded by both metering paths. No
+  product decision has been made about which credential should win for billing.
 
 ## Tests
 

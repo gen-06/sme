@@ -24,9 +24,16 @@ import java.util.Set;
 
 /**
  * Demo/seed data only — deliberately not a Flyway migration (Flyway governs schema,
- * not throwaway rows). Because Consumer provisioning is seed-only in this pass (no
- * admin endpoint yet), running with {@code SPRING_PROFILES_ACTIVE=seed} is required
- * for any authenticated endpoint to work locally; see README.
+ * not throwaway rows). This is the only thing that provisions an API-key Consumer:
+ * {@code POST /api/v1/admin/consumers} provisions additional consumers at runtime, but
+ * issues OAuth2 client credentials rather than API keys. So running with
+ * {@code SPRING_PROFILES_ACTIVE=seed} is still required for the API-key path to work
+ * locally; see README.
+ *
+ * <p>The {@code seed} profile doubles as the marker for "this is a local dev or demo
+ * instance" — see
+ * {@link com.creditscore.platform.identity.auth.PlatformAdminTokenStartupCheck}, which
+ * only tolerates the published default platform-admin token under this same profile.
  */
 @Component
 @Profile("seed")
