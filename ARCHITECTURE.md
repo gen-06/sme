@@ -59,9 +59,10 @@ The signing key and the OAuth2 authorization store are both persisted in Postgre
 of `docs/superpowers/specs/2026-09-11-oauth2-persistence-design.md` — this platform no
 longer has a row in this table for either "invalidates every token on restart" or
 "grows without bound," and the auth layer itself no longer blocks multi-instance
-deployment. This does not certify the whole platform for multiple instances:
-`SyncJobScheduler`'s reconciliation job runs independently per instance with no
-cross-instance coordination and has not been reviewed for concurrent-execution safety.
+deployment. `SyncJobScheduler`'s reconciliation job is also safe for multiple
+instances: `@SchedulerLock` (ShedLock, backed by the `shedlock` table, V12) ensures
+only one instance runs a given cron tick, so multi-instance deployment no longer means
+redundant per-instance reconciliation passes.
 
 ## Scoring model versioning
 

@@ -4,6 +4,8 @@ import com.creditscore.platform.ingestion.ConnectionStatus;
 import com.creditscore.platform.ingestion.DataSource;
 import com.creditscore.platform.sync.DataSyncService;
 import jakarta.persistence.EntityManagerFactory;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -15,6 +17,7 @@ import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.Map;
@@ -30,6 +33,17 @@ import java.util.Map;
 public class SyncReconciliationJobConfig {
 
     private static final int CHUNK_SIZE = 20;
+
+    /**
+     * Backs {@code @SchedulerLock} on {@code SyncJobScheduler.runScheduledReconciliation()}
+     * with a real cross-instance lock in the {@code shedlock} table (V12 migration) — without
+     * it, every instance launches its own full reconciliation on every cron tick, with no
+     * coordination between them.
+     */
+    @Bean
+    public LockProvider lockProvider(JdbcTemplate jdbcTemplate) {
+        return new JdbcTemplateLockProvider(jdbcTemplate);
+    }
 
     @Bean
     public Job syncReconciliationJob(JobRepository jobRepository, Step syncReconciliationStep) {
