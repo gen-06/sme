@@ -237,8 +237,10 @@ claim customizer/converter's scope-mapping, consumer-lookup and status-enforceme
 logic, `JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation,
 `OAuth2SigningKeyService`'s get-or-create/parse logic, `Consumer`'s status-transition
 rules (including `REVOKED` being terminal) and secret-rotation grace-period logic,
-`RotatingClientSecretPasswordEncoder`'s composite-secret matching, and
-`AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior.
+`RotatingClientSecretPasswordEncoder`'s composite-secret matching,
+`AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior,
+`RateLimitFilter`'s per-consumer token-bucket behavior, and `RequestIdFilter`'s
+MDC/response-header lifecycle.
 
 ## Secrets
 
@@ -291,6 +293,28 @@ still requires the token.
 `management.endpoints.web.exposure.include` in `application.yml` controls which actuator
 endpoints exist at all (currently `health,prometheus` — nothing else, same reasoning as
 before).
+
+## Logging
+
+Console output is structured JSON, one object per line (`logback-spring.xml`, via
+`net.logstash.logback`'s `LogstashEncoder`) — including plain `./mvnw spring-boot:run`,
+deliberately, so local runs see the same format a real deployment would rather than a
+prettier one that diverges from what's actually tested. `logging.level.*` in
+`application.yml` still controls verbosity as before; only the output format changed.
+
+Every request gets an `X-Request-Id` (generated, or echoed back unchanged if the caller
+already supplied one) — set as a response header and attached to every log line for
+that request via MDC, so concurrent requests' interleaved log lines can be told apart
+and grouped. `RequestIdFilter` is a plain servlet filter (not part of any
+`SecurityFilterChain`), so it covers every request regardless of which chain — or
+none — ultimately handles it, and logs one access-log line per request
+(method/URI/status/duration) since this codebase otherwise has almost no per-request
+log statements to correlate — except `/actuator/**`, deliberately: the Docker
+healthcheck hits `/actuator/health` every 10 seconds forever, and logging that would
+be ~8,600 identical lines/day of pure noise in a real deployment. Those requests still
+get an ID and response header, just no access-log line. It does not (yet) tag log lines
+with the authenticated
+`Consumer`'s id — a natural follow-up, not built here.
 
 ## Local dev reset
 

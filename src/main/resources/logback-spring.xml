@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Replaces Boot's default human-readable console pattern with one JSON object per line
+  (net.logstash.logback's LogstashEncoder), everywhere this app runs - including local
+  ./mvnw spring-boot:run, deliberately, so the format that actually gets tested is the
+  same one a real deployment sees rather than diverging between the two. Any MDC entry
+  set for the current thread (e.g. RequestIdFilter's "requestId") is automatically
+  included as a top-level JSON field.
+-->
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+    </appender>
+
+    <!-- Levels stay controlled by application.yml's logging.level.* (Spring Boot applies
+         those on top of this file regardless), so none are hardcoded here. -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
