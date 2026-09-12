@@ -52,11 +52,16 @@ version of this list.
 | No token revocation endpoint | A non-`ACTIVE` `Consumer` cannot mint new tokens, but an already-issued token stays valid until it expires | Prompt credential compromise response |
 | No client-secret rotation flow | The secret is shown once at provisioning; replacing it means provisioning a new consumer | Zero-downtime credential rotation |
 | No signing-key rotation | The RSA key (persisted in `oauth2_signing_keys`) is reused indefinitely; replacing it invalidates every outstanding token at once | Zero-downtime key rotation |
+| Signing key and issued tokens stored in plaintext in Postgres | DB read access is equivalent to forging tokens for any consumer (the key row includes private parameters); issued tokens are also stored unencrypted (SAS's own default schema) | Treating the database as outside the security boundary |
+| A corrupt/unparseable signing-key row fails every instance's startup | Total outage until an operator deletes the row and restarts (fail-fast by design) | Zero-touch recovery from key-row corruption |
 
 The signing key and the OAuth2 authorization store are both persisted in Postgres as
 of `docs/superpowers/specs/2026-09-11-oauth2-persistence-design.md` — this platform no
 longer has a row in this table for either "invalidates every token on restart" or
-"grows without bound," and can run more than one instance.
+"grows without bound," and the auth layer itself no longer blocks multi-instance
+deployment. This does not certify the whole platform for multiple instances:
+`SyncJobScheduler`'s reconciliation job runs independently per instance with no
+cross-instance coordination and has not been reviewed for concurrent-execution safety.
 
 ## Scoring model versioning
 

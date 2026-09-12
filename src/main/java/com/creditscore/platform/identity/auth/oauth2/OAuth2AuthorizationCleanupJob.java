@@ -13,7 +13,10 @@ import java.time.Instant;
  * without bound only if something deletes expired rows. This platform only ever
  * issues client_credentials tokens, so authorization_code/refresh_token/device_code
  * columns are always NULL and access_token_expires_at alone is a complete predicate
- * for "this row is stale."
+ * for "this row is stale." The same premise cuts the other way: a row with a NULL
+ * access_token_expires_at would never be matched by this predicate and would
+ * accumulate silently — also unreachable today, since every row this platform
+ * issues has a non-null access token.
  */
 @Component
 public class OAuth2AuthorizationCleanupJob {

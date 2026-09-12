@@ -311,7 +311,7 @@ the two scheduled jobs don't contend for the same moment; both use the existing
 
 Two new migrations, `V10` and `V11` (next in the existing `V1`–`V9` sequence):
 
-**`V10__oauth2_authorization_store.sql`** — Spring Authorization Server's reference
+**`V11__oauth2_authorization_store.sql`** — Spring Authorization Server's reference
 schema, `blob` → `text` per the schema file's own instruction:
 
 ```sql
@@ -360,7 +360,7 @@ because `OAuth2AuthorizationCleanupJob` runs a `WHERE access_token_expires_at < 
 delete every hour against a table that, in this app's actual usage, is scanned by that
 predicate far more often than by anything else.
 
-**`V11__oauth2_signing_keys.sql`**:
+**`V10__oauth2_signing_keys.sql`**:
 
 ```sql
 CREATE TABLE oauth2_signing_keys (

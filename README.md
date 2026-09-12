@@ -128,6 +128,18 @@ These are accepted MVP trade-offs, not oversights.
   tokens" problems. There is still no mechanism to rotate to a new key while
   continuing to accept tokens signed by an old one: replacing the stored key today
   invalidates every outstanding token at once, the same way a restart used to.
+- **The signing key and issued tokens are stored in plaintext in Postgres.** Database
+  read access to `oauth2_signing_keys` is equivalent to being able to forge a valid
+  access token for any consumer indefinitely (the row holds the full RSA key, including
+  its private parameters). `oauth2_authorization.access_token_value` holds live,
+  unexpired bearer tokens in plaintext — this is Spring Authorization Server's own
+  default schema shape, not something this plan added. Treat database access controls
+  and backup encryption as part of this system's security boundary, not an afterthought.
+- **A corrupt or unparseable signing-key row is a total outage until fixed manually.**
+  If the single row in `oauth2_signing_keys` ever becomes unparseable, every instance
+  fails to start (fail-fast, by design — silent regeneration would be worse). Recovery:
+  delete the row and restart; this invalidates every outstanding token, the same as a
+  restart used to before this key was persisted.
 - **Usage is metered per credential, not deduplicated across them.** A request that
   presents both `X-API-Key` and a `Bearer` token is recorded by both metering paths. No
   product decision has been made about which credential should win for billing.
@@ -143,7 +155,8 @@ its since-filter/gap-month invariants, mobile-money → `Transaction` normalizat
 mapping, each rule-based scoring rule in isolation, and the OAuth2 auth layer —
 `Consumer`'s OAuth2 factory/accessors, client provisioning and secret hashing, the JWT
 claim customizer/converter's scope-mapping and consumer-lookup logic,
-`JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation, and
+`JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation,
+`OAuth2SigningKeyService`'s get-or-create/parse logic, and
 `AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior.
 
 ## Full containerized run
