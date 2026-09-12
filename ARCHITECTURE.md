@@ -62,7 +62,12 @@ longer has a row in this table for either "invalidates every token on restart" o
 deployment. `SyncJobScheduler`'s reconciliation job is also safe for multiple
 instances: `@SchedulerLock` (ShedLock, backed by the `shedlock` table, V12) ensures
 only one instance runs a given cron tick, so multi-instance deployment no longer means
-redundant per-instance reconciliation passes.
+redundant per-instance reconciliation passes — provided a run completes within the
+lock's 30-minute lease (`lockAtMostFor`). A reconciliation pass that runs longer than
+that (plausible with a real, non-mock adapter making external API calls across the
+full catalog, not the current sub-second mock) has its lock expire while still
+running, and a second instance's next tick can then start a concurrent pass — the
+same double-execution this fix otherwise closes.
 
 ## Scoring model versioning
 
