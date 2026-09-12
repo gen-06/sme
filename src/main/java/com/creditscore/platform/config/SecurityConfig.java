@@ -236,17 +236,102 @@ public class SecurityConfig {
                 // "/actuator" (bare) is Spring Boot Actuator's own auto-registered
                 // discovery/index endpoint — it always exists regardless of
                 // management.endpoints.web.exposure.include, and only links to whatever
-                // IS exposed (just /actuator/health here). Listed explicitly rather than
-                // relying on any chain matching it: a request matching none of this app's
-                // securityMatchers bypasses Spring Security's filter chain entirely and
-                // reaches the servlet layer unauthenticated regardless of any
-                // authorizeHttpRequests rule — confirmed live before this endpoint was
-                // added here (it served 200 with real content while unmatched).
-                .securityMatcher("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator",
-                        "/actuator/health")
+                // IS exposed (just /actuator/health here). Listed explicitly here so it's
+                // PERMITTED (public, no auth) rather than left to fall through to
+                // catchAllFilterChain's denyAll() below, which would 404 it. Before this
+                // was added, an unmatched "/actuator" instead bypassed Spring Security's
+                // filter chain entirely and reached the servlet layer unauthenticated,
+                // regardless of any authorizeHttpRequests rule — confirmed live (it
+                // served 200 with real content while unmatched) — which is the gap
+                // catchAllFilterChain now closes for every other unmatched path.
+                //
+                // "/v3/api-docs.yaml" is springdoc's YAML sibling of "/v3/api-docs" — a
+                // literal path, not matched by "/v3/api-docs/**" (no slash after
+                // "api-docs"). Listed explicitly for the same reason as "/actuator":
+                // catchAllFilterChain would otherwise 404 it. Confirmed live: worked
+                // (200) before catchAllFilterChain existed, 404'd once it did, until
+                // added here.
+                .securityMatcher("/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui.html",
+                        "/actuator", "/actuator/health")
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
+    }
+
+    /**
+     * Final fallback chain: {@code @Order(6)} means Spring Security only ever reaches
+     * this for a path that matched none of chains 1-5 above, so it changes nothing for
+     * any path already handled today. It exists because this app has no other
+     * default-deny — without it, a path matching no {@code securityMatcher} bypasses
+     * Spring Security's filter chain entirely and reaches the servlet layer completely
+     * unauthenticated, regardless of any {@code authorizeHttpRequests} rule elsewhere
+     * (confirmed live: {@code /actuator}'s auto-registered index endpoint served 200
+     * with real content before it was added to {@link #publicFilterChain}'s matcher).
+     * A future dependency that auto-registers a new mapped endpoint (the same way
+     * Actuator did) is denied here by default instead of silently becoming reachable.
+     *
+     * <p>Returns a bare 404 rather than 401/403 for a directly-requested unmatched path:
+     * the status a genuinely nonexistent path already got is preserved (this chain
+     * doesn't change that), and an endpoint that exists but was never meant to be
+     * reachable here should look identical to "doesn't exist" rather than confirm it's
+     * real. Both the entry point AND the access-denied handler are wired to the same
+     * 404: {@code denyAll()} against every caller here is unauthenticated (anonymous),
+     * and {@code ExceptionTranslationFilter} routes an anonymous caller's
+     * {@code AccessDeniedException} to the authentication entry point, not the
+     * access-denied handler — only an authenticated-but-unauthorized caller reaches the
+     * latter. Leaving the entry point unset falls back to Spring Security's default
+     * {@code Http403ForbiddenEntryPoint} (confirmed live: produced a 403 here before
+     * this was added).
+     *
+     * <p>{@code dispatcherTypeMatchers(ERROR, ASYNC).permitAll()} is required, not
+     * cosmetic: Boot's {@code SecurityFilterAutoConfiguration} registers this app's
+     * whole filter chain for {@code ERROR} and {@code ASYNC} dispatches too, and
+     * {@code authorizeHttpRequests} rules apply to every dispatcher type by default. An
+     * unhandled exception anywhere in the app forwards internally to {@code /error},
+     * which matches no {@code securityMatcher} above and would otherwise re-enter this
+     * chain's {@code denyAll()} — silently turning every 4xx/5xx in the entire
+     * application into an empty 404 from {@link #notFound}, masking the real status and
+     * body {@code BasicErrorController} would have written (confirmed live: an
+     * authenticated request to a nonexistent {@code /api/**} sub-path returned an empty
+     * 404 instead of {@code BasicErrorController}'s JSON, before this permit was added).
+     * This permit does not reopen {@code /error} to a direct external hit: a directly
+     * requested {@code GET /error} is a {@code REQUEST} dispatch, still denied below.
+     * {@code ERROR} is the dispatch this app actually hits today and is what the live
+     * check above covers; {@code ASYNC} is permitted for the identical reason
+     * ({@code authorizeHttpRequests} applies to it too) but is currently unexercised — no
+     * controller here returns {@code Callable}/{@code DeferredResult}/a reactive type.
+     * Kept anyway so the first such endpoint doesn't inherit this exact bug.
+     */
+    @Bean
+    @Order(6)
+    public SecurityFilterChain catchAllFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR,
+                                jakarta.servlet.DispatcherType.ASYNC).permitAll()
+                        .anyRequest().denyAll())
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(this::notFoundEntryPoint)
+                        .accessDeniedHandler(this::notFoundAccessDenied));
+
+        return http.build();
+    }
+
+    private void notFoundEntryPoint(jakarta.servlet.http.HttpServletRequest request,
+                                     jakarta.servlet.http.HttpServletResponse response,
+                                     org.springframework.security.core.AuthenticationException exception)
+            throws IOException {
+        response.setStatus(404);
+    }
+
+    private void notFoundAccessDenied(jakarta.servlet.http.HttpServletRequest request,
+                                       jakarta.servlet.http.HttpServletResponse response,
+                                       org.springframework.security.access.AccessDeniedException exception)
+            throws IOException {
+        response.setStatus(404);
     }
 
     private void unauthorized(jakarta.servlet.http.HttpServletRequest request,

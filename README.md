@@ -186,12 +186,13 @@ These are accepted MVP trade-offs, not oversights.
   enforcing agreement.** `publicFilterChain`'s `securityMatcher` in `SecurityConfig.java`
   lists `/actuator` and `/actuator/health` because those are the only paths
   `management.endpoints.web.exposure.include` (in `application.yml`) currently exposes.
-  Adding another id to that `include` list (e.g. `metrics`) makes `/actuator/metrics`
-  live without any filter chain claiming it — this app has no final catch-all chain, so
-  an unmatched path bypasses Spring Security entirely rather than falling through to a
-  default-deny (confirmed live: `/actuator` itself served real content, fully
-  unauthenticated, before it was added to a matcher). Nothing currently tests that these
-  two files stay in sync.
+  A final catch-all `SecurityFilterChain` (`catchAllFilterChain`, `@Order(6)`) denies
+  everything not claimed by an earlier chain, so adding another id to that `include` list
+  (e.g. `metrics`) without also adding its path to a matcher no longer leaks it
+  unauthenticated — it 404s instead (confirmed live). The failure mode is now "silently
+  non-functional," not "silently insecure," but nothing currently tests that these two
+  files stay in sync, so an intentionally-exposed new endpoint won't work until someone
+  also adds it to `publicFilterChain`'s matcher.
 
 ## Tests
 
