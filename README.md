@@ -96,6 +96,20 @@ curl -u "$CLIENT_ID:$CLIENT_SECRET" -d 'grant_type=client_credentials&scope=SCOR
   http://localhost:8080/oauth2/token
 ```
 
+Suspend or revoke a consumer (also requires `PLATFORM_ADMIN_TOKEN`):
+
+```bash
+curl -X PATCH http://localhost:8080/api/v1/admin/consumers/$CONSUMER_ID/status \
+  -H 'Content-Type: application/json' \
+  -H 'X-Platform-Admin-Token: local-dev-admin-token' \
+  -d '{"status":"SUSPENDED"}'
+```
+
+This kills every one of that consumer's outstanding access tokens immediately, not
+just future issuance — see [Known limitations](#known-limitations) for exactly what
+that does and doesn't cover. `SUSPENDED` can be reversed (`{"status":"ACTIVE"}`);
+`REVOKED` is terminal — no further transition is accepted once a consumer is revoked.
+
 Call any existing endpoint with `Authorization: Bearer <access_token>` instead of
 `X-API-Key` — every scope-based check behaves identically either way. Access tokens
 expire after 1 hour by default (tunable via `app.oauth2.access-token-ttl-minutes`); there
@@ -113,11 +127,18 @@ client-credentials grant.
 
 These are accepted MVP trade-offs, not oversights.
 
-- **No token revocation before natural expiry.** There is no `/oauth2/revoke` endpoint.
-  Suspending or revoking a `Consumer` stops it minting *new* tokens immediately
-  (`JpaRegisteredClientRepository` returns `null` for a non-`ACTIVE` consumer), but a
-  token already in a caller's hands stays valid until it expires. The access-token TTL
-  (`app.oauth2.access-token-ttl-minutes`) is the only bound on that window.
+- **No per-token revocation.** Suspending or revoking a `Consumer`
+  (`PATCH /api/v1/admin/consumers/{id}/status`) blocks new token issuance
+  (`JpaRegisteredClientRepository` returns `null` for a non-`ACTIVE` consumer) *and*
+  immediately invalidates every one of that consumer's already-issued tokens
+  (`OAuth2ConsumerAuthenticationConverter` re-checks status on every request). What
+  this does not provide is standards-compliant single-token revocation (RFC 7009):
+  there is no `/oauth2/revoke` endpoint, and no way to kill one token while leaving a
+  consumer's other outstanding tokens valid — the only granularity is the whole
+  consumer. This guarantee also only holds for requests this app itself authenticates:
+  if a future caller validates these JWTs independently using only `/oauth2/jwks` (a
+  gateway, a sidecar, another service), the signature is still valid and nothing there
+  consults `consumers.status` — the token would still work there until it expires.
 - **No client-secret rotation flow.** A secret is shown exactly once, at provisioning.
   Replacing a compromised one means provisioning a new consumer; there is no way to
   issue a second secret and retire the first without downtime for that client.
@@ -154,9 +175,10 @@ Covers: mock-adapter determinism (same `DataSource` → identical synthetic hist
 its since-filter/gap-month invariants, mobile-money → `Transaction` normalization
 mapping, each rule-based scoring rule in isolation, and the OAuth2 auth layer —
 `Consumer`'s OAuth2 factory/accessors, client provisioning and secret hashing, the JWT
-claim customizer/converter's scope-mapping and consumer-lookup logic,
-`JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation,
-`OAuth2SigningKeyService`'s get-or-create/parse logic, and
+claim customizer/converter's scope-mapping, consumer-lookup and status-enforcement
+logic, `JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation,
+`OAuth2SigningKeyService`'s get-or-create/parse logic, `Consumer`'s status-transition
+rules (including `REVOKED` being terminal), and
 `AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior.
 
 ## Full containerized run

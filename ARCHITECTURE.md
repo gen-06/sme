@@ -49,7 +49,7 @@ version of this list.
 
 | Limitation | Consequence | Blocks |
 |------------|-------------|--------|
-| No token revocation endpoint | A non-`ACTIVE` `Consumer` cannot mint new tokens, but an already-issued token stays valid until it expires | Prompt credential compromise response |
+| No per-token revocation (RFC 7009) | `PATCH /api/v1/admin/consumers/{id}/status` blocks new issuance and kills every outstanding token for that consumer at once (`OAuth2ConsumerAuthenticationConverter` re-checks status per request); there is no way to revoke one token while leaving a consumer's others valid | Fine-grained, per-token credential compromise response |
 | No client-secret rotation flow | The secret is shown once at provisioning; replacing it means provisioning a new consumer | Zero-downtime credential rotation |
 | No signing-key rotation | The RSA key (persisted in `oauth2_signing_keys`) is reused indefinitely; replacing it invalidates every outstanding token at once | Zero-downtime key rotation |
 | Signing key and issued tokens stored in plaintext in Postgres | DB read access is equivalent to forging tokens for any consumer (the key row includes private parameters); issued tokens are also stored unencrypted (SAS's own default schema) | Treating the database as outside the security boundary |

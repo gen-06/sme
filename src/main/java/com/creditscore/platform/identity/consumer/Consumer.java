@@ -85,6 +85,23 @@ public class Consumer extends AuditableEntity {
         return status;
     }
 
+    /**
+     * REVOKED is terminal: once revoked, no further transition is allowed (including
+     * back to ACTIVE) — modeling revocation as permanent, the same way this platform
+     * already treats a compromised secret as something you replace by provisioning a
+     * new consumer, not by reviving the old one. ACTIVE and SUSPENDED transition
+     * freely in both directions. Setting the current status again is a no-op.
+     */
+    public void transitionTo(ConsumerStatus newStatus) {
+        if (newStatus == status) {
+            return;
+        }
+        if (status == ConsumerStatus.REVOKED) {
+            throw new IllegalArgumentException("Consumer " + getId() + " is REVOKED; no further transition is allowed");
+        }
+        this.status = newStatus;
+    }
+
     public Instant getLastUsedAt() {
         return lastUsedAt;
     }

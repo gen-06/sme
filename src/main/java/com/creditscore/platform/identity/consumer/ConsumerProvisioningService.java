@@ -5,6 +5,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,6 +31,14 @@ public class ConsumerProvisioningService {
 
         Consumer saved = consumerRepository.save(consumer);
         return new ProvisionedConsumer(saved.getId(), clientId, rawClientSecret);
+    }
+
+    @Transactional
+    public Consumer updateStatus(UUID consumerId, ConsumerStatus newStatus) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new NoSuchElementException("No consumer with id: " + consumerId));
+        consumer.transitionTo(newStatus);
+        return consumerRepository.save(consumer);
     }
 
     public record ProvisionedConsumer(UUID consumerId, String clientId, String clientSecret) {

@@ -3,6 +3,7 @@ package com.creditscore.platform.identity.auth.oauth2;
 import com.creditscore.platform.identity.auth.OAuth2ConsumerAuthenticationToken;
 import com.creditscore.platform.identity.consumer.Consumer;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
+import com.creditscore.platform.identity.consumer.ConsumerStatus;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -20,7 +21,12 @@ import java.util.UUID;
  * handles both the space-delimited-string and collection claim shapes correctly;
  * (2) load the real Consumer (by the consumer_id claim OAuth2ConsumerTokenCustomizer
  * stamps at issuance) so the resulting principal matches ApiKeyAuthenticationToken's
- * shape exactly.
+ * shape exactly. Also re-checks the Consumer's status on every request — mirroring
+ * ApiKeyAuthFilter's existing behavior — so suspending or revoking a Consumer kills
+ * its already-issued OAuth2 tokens immediately, not just future ones (see
+ * JpaRegisteredClientRepository.toRegisteredClient for the "block new issuance" half
+ * of this). This costs nothing extra: the lookup already happens for every
+ * authenticated request regardless.
  */
 public class OAuth2ConsumerAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
@@ -55,6 +61,12 @@ public class OAuth2ConsumerAuthenticationConverter implements Converter<Jwt, Abs
 
         Consumer consumer = consumerRepository.findById(parsedConsumerId)
                 .orElseThrow(() -> new BadCredentialsException("Token references an unknown consumer: " + consumerId));
+
+        if (consumer.getStatus() != ConsumerStatus.ACTIVE) {
+            // Same generic failure as an unknown consumer — don't leak "this credential
+            // exists but is suspended" to an unauthenticated caller.
+            throw new BadCredentialsException("Token references an unknown consumer: " + consumerId);
+        }
 
         return new OAuth2ConsumerAuthenticationToken(consumer, authorities);
     }

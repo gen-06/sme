@@ -3,7 +3,10 @@ package com.creditscore.platform.identity.auth.oauth2;
 import com.creditscore.platform.identity.consumer.Consumer;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
 import com.creditscore.platform.identity.consumer.ConsumerScope;
+import com.creditscore.platform.identity.consumer.ConsumerStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -62,6 +65,25 @@ class OAuth2ConsumerAuthenticationConverterTest {
     void unknownConsumerIdIsRejected() {
         UUID consumerId = UUID.randomUUID();
         when(consumerRepository.findById(consumerId)).thenReturn(Optional.empty());
+
+        Jwt jwt = Jwt.withTokenValue("token-value")
+                .header("alg", "RS256")
+                .claim("scope", "SCORE_READ")
+                .claim("consumer_id", consumerId.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build();
+
+        assertThatThrownBy(() -> converter.convert(jwt)).isInstanceOf(BadCredentialsException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConsumerStatus.class, names = "ACTIVE", mode = EnumSource.Mode.EXCLUDE)
+    void nonActiveConsumerIsRejectedEvenWithAStillValidToken(ConsumerStatus status) {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        consumer.transitionTo(status);
+        when(consumerRepository.findById(consumerId)).thenReturn(Optional.of(consumer));
 
         Jwt jwt = Jwt.withTokenValue("token-value")
                 .header("alg", "RS256")
