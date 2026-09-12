@@ -3,6 +3,7 @@ package com.creditscore.platform.config;
 import com.creditscore.platform.billing.UsageMeter;
 import com.creditscore.platform.identity.auth.AdminTokenFilter;
 import com.creditscore.platform.identity.auth.ApiKeyAuthFilter;
+import com.creditscore.platform.identity.auth.RateLimitFilter;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2ConsumerAuthenticationConverter;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2SigningKeyService;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2UsageMeteringFilter;
@@ -36,6 +37,7 @@ import org.springframework.security.oauth2.server.authorization.config.annotatio
 import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -206,11 +208,14 @@ public class SecurityConfig {
     @Order(4)
     public SecurityFilterChain apiFilterChain(HttpSecurity http, ConsumerRepository consumerRepository,
                                                PlatformTransactionManager transactionManager,
-                                               UsageMeter usageMeter, JwtDecoder jwtDecoder) throws Exception {
+                                               UsageMeter usageMeter, JwtDecoder jwtDecoder,
+                                               @Value("${app.rate-limit.requests-per-minute}") int requestsPerMinute)
+            throws Exception {
         ApiKeyAuthFilter apiKeyAuthFilter =
                 new ApiKeyAuthFilter(consumerRepository, new TransactionTemplate(transactionManager), usageMeter);
         OAuth2UsageMeteringFilter oauth2UsageMeteringFilter = new OAuth2UsageMeteringFilter(consumerRepository,
                 usageMeter, new TransactionTemplate(transactionManager));
+        RateLimitFilter rateLimitFilter = new RateLimitFilter(requestsPerMinute);
 
         http
                 .securityMatcher("/api/**")
@@ -222,6 +227,11 @@ public class SecurityConfig {
                         .decoder(jwtDecoder)
                         .jwtAuthenticationConverter(new OAuth2ConsumerAuthenticationConverter(consumerRepository))))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                // Positioned after AuthorizationFilter so it only runs for a request that
+                // already passed authentication and authorization — see RateLimitFilter's
+                // javadoc for why that ordering is what lets a single filter see the
+                // resolved Consumer regardless of which credential authenticated it.
+                .addFilterAfter(rateLimitFilter, AuthorizationFilter.class)
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(this::unauthorized)
                         .accessDeniedHandler(this::forbidden));

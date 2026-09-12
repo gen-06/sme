@@ -77,6 +77,13 @@ Swagger UI (no auth required): http://localhost:8080/swagger-ui.html
 
 Auth: `X-API-Key: <key>` header, or `Authorization: Bearer <access_token>` — see
 [OAuth2 client-credentials](#oauth2-client-credentials-coexists-with-api-keys) below.
+Every consumer is also rate-limited to `app.rate-limit.requests-per-minute` (default
+300) regardless of which credential authenticates the request — see
+[Known limitations](#known-limitations) for what that does and doesn't cover. A
+request over the limit gets `429` with a `Retry-After` header and
+`{"error":"rate_limited",...}`. A throttled request is still metered like any other
+(confirmed live: `usage_records` gets a row with `response_status=429`) — it counted
+against the consumer's usage the same way a `401` or `403` already does.
 The seed consumer holds all scopes.
 
 ### OAuth2 client-credentials (coexists with API keys)
@@ -186,13 +193,26 @@ These are accepted MVP trade-offs, not oversights.
   enforcing agreement.** `publicFilterChain`'s `securityMatcher` in `SecurityConfig.java`
   lists `/actuator` and `/actuator/health` because those are the only paths
   `management.endpoints.web.exposure.include` (in `application.yml`) currently exposes.
-  A final catch-all `SecurityFilterChain` (`catchAllFilterChain`, `@Order(6)`) denies
+  A final catch-all `SecurityFilterChain` (`catchAllFilterChain`, `@Order(7)`) denies
   everything not claimed by an earlier chain, so adding another id to that `include` list
   (e.g. `metrics`) without also adding its path to a matcher no longer leaks it
   unauthenticated — it 404s instead (confirmed live). The failure mode is now "silently
   non-functional," not "silently insecure," but nothing currently tests that these two
   files stay in sync, so an intentionally-exposed new endpoint won't work until someone
   also adds it to `publicFilterChain`'s matcher.
+- **Rate limiting is per-instance, not global.** `RateLimitFilter` holds one token
+  bucket per consumer in an in-memory map on the JVM that handled the request. A single
+  instance enforces `app.rate-limit.requests-per-minute` correctly; N instances behind
+  a load balancer give each consumer roughly N times that ceiling, since each instance
+  tracks its own count with no shared state. Fixing this for real needs a shared store
+  (Redis, most likely) instead of the in-memory map — deliberately not built for this
+  MVP, the same trade-off this project already made for job locking before ShedLock
+  existed.
+- **The rate-limit bucket map never evicts entries.** Every distinct consumer that's
+  ever made an authenticated request keeps its `Bucket` in memory for the life of the
+  process. Fine for this project's small, manually-provisioned consumer set; a
+  larger/self-serve consumer base would need a bounded or expiring cache (e.g.
+  Caffeine) instead of a plain `ConcurrentHashMap`.
 
 ## Tests
 

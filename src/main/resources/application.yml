@@ -75,6 +75,12 @@ app:
     # via the PLATFORM_ADMIN_TOKEN env var for anything beyond a laptop.
     platform-admin-token: ${PLATFORM_ADMIN_TOKEN:local-dev-admin-token}
 
+  rate-limit:
+    # Per-consumer ceiling on /api/**, enforced in-memory per instance (see README's
+    # Known limitations for the multi-instance caveat). Generous enough that the demo
+    # script/Postman collection never hits it; a real deployment tunes this per traffic.
+    requests-per-minute: 300
+
 management:
   endpoints:
     web:
