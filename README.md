@@ -182,6 +182,16 @@ These are accepted MVP trade-offs, not oversights.
 - **Usage is metered per credential, not deduplicated across them.** A request that
   presents both `X-API-Key` and a `Bearer` token is recorded by both metering paths. No
   product decision has been made about which credential should win for billing.
+- **Actuator exposure and the security matcher are two separate files with nothing
+  enforcing agreement.** `publicFilterChain`'s `securityMatcher` in `SecurityConfig.java`
+  lists `/actuator` and `/actuator/health` because those are the only paths
+  `management.endpoints.web.exposure.include` (in `application.yml`) currently exposes.
+  Adding another id to that `include` list (e.g. `metrics`) makes `/actuator/metrics`
+  live without any filter chain claiming it — this app has no final catch-all chain, so
+  an unmatched path bypasses Spring Security entirely rather than falling through to a
+  default-deny (confirmed live: `/actuator` itself served real content, fully
+  unauthenticated, before it was added to a matcher). Nothing currently tests that these
+  two files stay in sync.
 
 ## Tests
 
@@ -205,6 +215,13 @@ rules (including `REVOKED` being terminal) and secret-rotation grace-period logi
 ```bash
 docker compose --profile full up --build
 ```
+
+The `app` service has a real Docker healthcheck against `GET /actuator/health` (checks
+DB connectivity, returns `503`/`{"status":"DOWN"}` if Postgres is unreachable) —
+`docker ps` reports `healthy`/`unhealthy` accordingly. This is the only actuator
+endpoint exposed (`management.endpoints.web.exposure.include: health` in
+`application.yml`); it returns no component detail (`show-details: never`) since it's
+fully unauthenticated, same as Swagger UI.
 
 ## Local dev reset
 

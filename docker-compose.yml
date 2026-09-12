@@ -39,6 +39,12 @@ services:
       PLATFORM_ADMIN_TOKEN: local-dev-admin-token
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     profiles: ["full"]
 
 volumes:

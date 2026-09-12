@@ -233,7 +233,17 @@ public class SecurityConfig {
     @Order(5)
     public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator/health")
+                // "/actuator" (bare) is Spring Boot Actuator's own auto-registered
+                // discovery/index endpoint — it always exists regardless of
+                // management.endpoints.web.exposure.include, and only links to whatever
+                // IS exposed (just /actuator/health here). Listed explicitly rather than
+                // relying on any chain matching it: a request matching none of this app's
+                // securityMatchers bypasses Spring Security's filter chain entirely and
+                // reaches the servlet layer unauthenticated regardless of any
+                // authorizeHttpRequests rule — confirmed live before this endpoint was
+                // added here (it served 200 with real content while unmatched).
+                .securityMatcher("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator",
+                        "/actuator/health")
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
