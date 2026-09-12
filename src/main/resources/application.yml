@@ -58,12 +58,16 @@ app:
 
   oauth2:
     # Access-token lifetime for the client_credentials grant. Kept deliberately short:
-    # this grant issues no refresh token and the platform has no revocation endpoint, so
-    # natural expiry is the only way an issued token stops working.
+    # this grant issues no refresh token, and there is no way to revoke a single token
+    # without suspending its whole consumer (see README's Known limitations), so natural
+    # expiry is the main bound on how long a leaked token stays useful.
     access-token-ttl-minutes: 60
     # Every hour at :30 — offset from app.batch.sync-cron (every 6 hours on the hour) so
     # the two scheduled jobs don't contend for the same moment.
     authorization-cleanup-cron: "0 30 * * * *"
+    # After PATCH /consumers/{id}/rotate-secret, the old secret keeps authenticating for
+    # this long (grace period for updating deployed clients) before it's dropped.
+    secret-rotation-grace-period-hours: 24
 
   admin:
     # Local-dev default matches this project's existing low-ceremony pattern (the

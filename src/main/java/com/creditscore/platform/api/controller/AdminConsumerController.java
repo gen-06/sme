@@ -42,4 +42,11 @@ public class AdminConsumerController {
         Consumer updated = provisioningService.updateStatus(id, request.status());
         return ResponseEntity.ok(new ConsumerStatusResponse(updated.getId(), updated.getStatus()));
     }
+
+    @PostMapping("/{id}/rotate-secret")
+    public ResponseEntity<ConsumerProvisionResponse> rotateSecret(@PathVariable UUID id) {
+        var rotated = provisioningService.rotateSecret(id);
+        return ResponseEntity.ok(
+                new ConsumerProvisionResponse(rotated.consumerId(), rotated.clientId(), rotated.clientSecret()));
+    }
 }

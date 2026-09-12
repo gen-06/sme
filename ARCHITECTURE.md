@@ -50,7 +50,7 @@ version of this list.
 | Limitation | Consequence | Blocks |
 |------------|-------------|--------|
 | No per-token revocation (RFC 7009) | `PATCH /api/v1/admin/consumers/{id}/status` blocks new issuance and kills every outstanding token for that consumer at once (`OAuth2ConsumerAuthenticationConverter` re-checks status per request); there is no way to revoke one token while leaving a consumer's others valid | Fine-grained, per-token credential compromise response |
-| No client-secret rotation flow | The secret is shown once at provisioning; replacing it means provisioning a new consumer | Zero-downtime credential rotation |
+| Client-secret rotation keeps only two generations | `POST .../rotate-secret` grants a grace period (`app.oauth2.secret-rotation-grace-period-hours`) for the old secret, but rotating again before it expires drops that older secret immediately rather than keeping three valid at once | Rotating twice in quick succession without cutting the first rotation's grace window short |
 | No signing-key rotation | The RSA key (persisted in `oauth2_signing_keys`) is reused indefinitely; replacing it invalidates every outstanding token at once | Zero-downtime key rotation |
 | Signing key and issued tokens stored in plaintext in Postgres | DB read access is equivalent to forging tokens for any consumer (the key row includes private parameters); issued tokens are also stored unencrypted (SAS's own default schema) | Treating the database as outside the security boundary |
 | A corrupt/unparseable signing-key row fails every instance's startup | Total outage until an operator deletes the row and restarts (fail-fast by design) | Zero-touch recovery from key-row corruption |

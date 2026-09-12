@@ -62,7 +62,15 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
     }
 
     private RegisteredClient toRegisteredClient(Consumer consumer) {
-        if (consumer.getOauthClientId() == null || consumer.getOauthClientSecretHash() == null) {
+        // Guards the exact value the builder below actually uses. Checking
+        // getOauthClientSecretHash() here instead would pass for a (currently
+        // unreachable, but not enforced anywhere) corrupted state — null primary hash,
+        // non-expired previous hash — and hand a "null|<hash>" garbage composite string
+        // to RegisteredClient.clientSecret(...), which the delegate PasswordEncoder
+        // would reject with an unguarded IllegalArgumentException (not an
+        // AuthenticationException) instead of the clean 401 this null check exists to
+        // produce.
+        if (consumer.getOauthClientId() == null || consumer.getEffectiveOauthClientSecret() == null) {
             return null;
         }
         // A suspended/revoked Consumer must stop minting new tokens immediately (per
@@ -77,7 +85,7 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
         }
         return RegisteredClient.withId(consumer.getId().toString())
                 .clientId(consumer.getOauthClientId())
-                .clientSecret(consumer.getOauthClientSecretHash())
+                .clientSecret(consumer.getEffectiveOauthClientSecret())
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scopes(scopes -> consumer.getScopes().forEach(scope -> scopes.add(scope.name())))

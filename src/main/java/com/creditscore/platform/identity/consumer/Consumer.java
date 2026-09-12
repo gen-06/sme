@@ -1,6 +1,7 @@
 package com.creditscore.platform.identity.consumer;
 
 import com.creditscore.platform.common.AuditableEntity;
+import com.creditscore.platform.identity.auth.oauth2.RotatingClientSecretPasswordEncoder;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -11,6 +12,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -37,6 +39,12 @@ public class Consumer extends AuditableEntity {
 
     @Column(name = "oauth_client_secret_hash")
     private String oauthClientSecretHash;
+
+    @Column(name = "oauth_client_secret_hash_previous")
+    private String oauthClientSecretHashPrevious;
+
+    @Column(name = "oauth_client_secret_previous_expires_at")
+    private Instant oauthClientSecretPreviousExpiresAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -141,5 +149,38 @@ public class Consumer extends AuditableEntity {
 
     public void setOauthClientSecretHash(String oauthClientSecretHash) {
         this.oauthClientSecretHash = oauthClientSecretHash;
+    }
+
+    /**
+     * Moves the current primary hash to the previous slot with a grace-period expiry,
+     * then installs the new hash as primary. Rotating again before the previous grace
+     * period expires overwrites that slot — only the newest "previous" is ever kept,
+     * never a third generation.
+     */
+    public void rotateSecret(String newSecretHash, Duration gracePeriod) {
+        this.oauthClientSecretHashPrevious = this.oauthClientSecretHash;
+        this.oauthClientSecretPreviousExpiresAt = Instant.now().plus(gracePeriod);
+        this.oauthClientSecretHash = newSecretHash;
+    }
+
+    /**
+     * The single string {@code RegisteredClient.clientSecret} carries into Spring
+     * Authorization Server's {@code ClientSecretAuthenticationProvider} — just the
+     * primary hash normally, or {@code primary|previous} while a rotation's grace
+     * period is still active. {@code RotatingClientSecretPasswordEncoder} is the
+     * counterpart that knows how to split this back apart at match time.
+     */
+    public String getEffectiveOauthClientSecret() {
+        if (oauthClientSecretHash == null) {
+            // A null primary hash means this consumer isn't OAuth2-provisioned at all —
+            // never compose "null|<previous>", even if a previous hash somehow exists.
+            return null;
+        }
+        if (oauthClientSecretHashPrevious != null && oauthClientSecretPreviousExpiresAt != null
+                && oauthClientSecretPreviousExpiresAt.isAfter(Instant.now())) {
+            return oauthClientSecretHash + RotatingClientSecretPasswordEncoder.DELIMITER
+                    + oauthClientSecretHashPrevious;
+        }
+        return oauthClientSecretHash;
     }
 }

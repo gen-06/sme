@@ -3,7 +3,10 @@ package com.creditscore.platform.identity.consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,5 +88,61 @@ class ConsumerTest {
                     .isInstanceOf(IllegalArgumentException.class);
             assertThat(consumer.getStatus()).isEqualTo(ConsumerStatus.REVOKED);
         }
+    }
+
+    @Test
+    void effectiveSecretIsJustThePrimaryHashWhenNoRotationIsInProgress() {
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", null, Set.of(ConsumerScope.SCORE_READ));
+        consumer.setOauthClientSecretHash("{bcrypt}primaryhash");
+
+        assertThat(consumer.getEffectiveOauthClientSecret()).isEqualTo("{bcrypt}primaryhash");
+    }
+
+    @Test
+    void effectiveSecretIsNullWhenThePrimaryHashIsNullEvenIfAPreviousHashSomehowExists() {
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", null, Set.of(ConsumerScope.SCORE_READ));
+        // Not reachable via any real write path today (rotateSecret always moves a
+        // real primary into previous) — this pins the defensive guard so a future
+        // change can't silently reintroduce a "null|<hash>" composite string.
+        ReflectionTestUtils.setField(consumer, "oauthClientSecretHashPrevious", "{bcrypt}orphanedprevious");
+        ReflectionTestUtils.setField(consumer, "oauthClientSecretPreviousExpiresAt",
+                Instant.now().plusSeconds(3600));
+
+        assertThat(consumer.getEffectiveOauthClientSecret()).isNull();
+    }
+
+    @Test
+    void rotatingTheSecretMovesTheOldHashToPreviousWithAnExpiry() {
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", null, Set.of(ConsumerScope.SCORE_READ));
+        consumer.setOauthClientSecretHash("{bcrypt}oldhash");
+
+        consumer.rotateSecret("{bcrypt}newhash", Duration.ofHours(24));
+
+        assertThat(consumer.getOauthClientSecretHash()).isEqualTo("{bcrypt}newhash");
+        assertThat(consumer.getEffectiveOauthClientSecret())
+                .isEqualTo("{bcrypt}newhash|{bcrypt}oldhash");
+    }
+
+    @Test
+    void effectiveSecretDropsThePreviousHashOnceItsGracePeriodExpires() {
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", null, Set.of(ConsumerScope.SCORE_READ));
+        consumer.setOauthClientSecretHash("{bcrypt}oldhash");
+        consumer.rotateSecret("{bcrypt}newhash", Duration.ofHours(24));
+        ReflectionTestUtils.setField(consumer, "oauthClientSecretPreviousExpiresAt",
+                Instant.now().minusSeconds(1));
+
+        assertThat(consumer.getEffectiveOauthClientSecret()).isEqualTo("{bcrypt}newhash");
+    }
+
+    @Test
+    void rotatingTwiceBeforeTheFirstGracePeriodExpiresOverwritesThePreviousSlot() {
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", null, Set.of(ConsumerScope.SCORE_READ));
+        consumer.setOauthClientSecretHash("{bcrypt}v1");
+        consumer.rotateSecret("{bcrypt}v2", Duration.ofHours(24));
+
+        consumer.rotateSecret("{bcrypt}v3", Duration.ofHours(24));
+
+        assertThat(consumer.getOauthClientSecretHash()).isEqualTo("{bcrypt}v3");
+        assertThat(consumer.getEffectiveOauthClientSecret()).isEqualTo("{bcrypt}v3|{bcrypt}v2");
     }
 }

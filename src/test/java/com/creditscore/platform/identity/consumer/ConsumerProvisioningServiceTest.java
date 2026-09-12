@@ -1,5 +1,6 @@
 package com.creditscore.platform.identity.consumer;
 
+import com.creditscore.platform.identity.auth.oauth2.RotatingClientSecretPasswordEncoder;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
@@ -20,9 +21,13 @@ import static org.mockito.Mockito.when;
 class ConsumerProvisioningServiceTest {
 
     private final ConsumerRepository consumerRepository = mock(ConsumerRepository.class);
-    private final PasswordEncoder passwordEncoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    // The real production wiring (SecurityConfig.passwordEncoder()) is always this wrapper,
+    // never the bare delegate — mirroring that here so rotation's composite-secret matching
+    // is exercised the same way it is at runtime.
+    private final PasswordEncoder passwordEncoder =
+            new RotatingClientSecretPasswordEncoder(PasswordEncoderFactories.createDelegatingPasswordEncoder());
     private final ConsumerProvisioningService service =
-            new ConsumerProvisioningService(consumerRepository, passwordEncoder);
+            new ConsumerProvisioningService(consumerRepository, passwordEncoder, 24);
 
     @Test
     void provisionGeneratesClientCredentialsAndStoresOnlyTheHash() {
@@ -74,5 +79,40 @@ class ConsumerProvisioningServiceTest {
 
         assertThatThrownBy(() -> service.updateStatus(consumerId, ConsumerStatus.ACTIVE))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rotateSecretGeneratesANewSecretAndKeepsTheOldOneWorkingDuringTheGracePeriod() {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        consumer.setOauthClientId("client_abc");
+        String oldSecretHash = passwordEncoder.encode("old-secret");
+        consumer.setOauthClientSecretHash(oldSecretHash);
+        when(consumerRepository.findById(consumerId)).thenReturn(Optional.of(consumer));
+        when(consumerRepository.save(any(Consumer.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.rotateSecret(consumerId);
+
+        assertThat(result.clientId()).isEqualTo("client_abc");
+        assertThat(result.clientSecret()).startsWith("secret_");
+        assertThat(passwordEncoder.matches(result.clientSecret(), consumer.getEffectiveOauthClientSecret())).isTrue();
+        assertThat(passwordEncoder.matches("old-secret", consumer.getEffectiveOauthClientSecret())).isTrue();
+    }
+
+    @Test
+    void rotateSecretForAnUnknownConsumerThrowsNoSuchElement() {
+        UUID consumerId = UUID.randomUUID();
+        when(consumerRepository.findById(consumerId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.rotateSecret(consumerId)).isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void rotateSecretRejectsAConsumerWithNoOauthClientId() {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        when(consumerRepository.findById(consumerId)).thenReturn(Optional.of(consumer));
+
+        assertThatThrownBy(() -> service.rotateSecret(consumerId)).isInstanceOf(IllegalArgumentException.class);
     }
 }

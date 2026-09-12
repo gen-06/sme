@@ -6,6 +6,7 @@ import com.creditscore.platform.identity.auth.ApiKeyAuthFilter;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2ConsumerAuthenticationConverter;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2SigningKeyService;
 import com.creditscore.platform.identity.auth.oauth2.OAuth2UsageMeteringFilter;
+import com.creditscore.platform.identity.auth.oauth2.RotatingClientSecretPasswordEncoder;
 import com.creditscore.platform.identity.consumer.ConsumerRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -18,7 +19,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -29,6 +29,7 @@ import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.authentication.ClientSecretAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
@@ -55,9 +56,19 @@ public class SecurityConfig {
             "/oauth2/token", "/oauth2/jwks", "/.well-known/oauth-authorization-server"
     };
 
+    /**
+     * A pure passthrough for a single hash (so {@code ConsumerProvisioningService}'s
+     * {@code encode}/normal secret checks are unaffected), but able to check a raw
+     * secret against a {@code primary|previous} composite string during a client-secret
+     * rotation's grace period — see {@link RotatingClientSecretPasswordEncoder} and
+     * {@code Consumer.getEffectiveOauthClientSecret}. Wired into
+     * {@code ClientSecretAuthenticationProvider} in {@link #authorizationServerFilterChain}
+     * so the token endpoint's own client authentication uses this behavior too, not just
+     * this app's own code.
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        return new RotatingClientSecretPasswordEncoder(PasswordEncoderFactories.createDelegatingPasswordEncoder());
     }
 
     @Bean
@@ -150,7 +161,8 @@ public class SecurityConfig {
      */
     @Bean
     @Order(2)
-    public SecurityFilterChain authorizationServerFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain authorizationServerFilterChain(HttpSecurity http, PasswordEncoder passwordEncoder)
+            throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 new OAuth2AuthorizationServerConfigurer();
 
@@ -159,7 +171,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .with(authorizationServerConfigurer, Customizer.withDefaults());
+                .with(authorizationServerConfigurer, configurer -> configurer
+                        .clientAuthentication(clientAuth -> clientAuth.authenticationProviders(providers -> providers
+                                .stream()
+                                .filter(ClientSecretAuthenticationProvider.class::isInstance)
+                                .map(ClientSecretAuthenticationProvider.class::cast)
+                                .forEach(provider -> provider.setPasswordEncoder(passwordEncoder)))));
 
         return http.build();
     }

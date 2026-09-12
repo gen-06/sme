@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -39,6 +40,38 @@ class JpaRegisteredClientRepositoryTest {
         assertThat(registeredClient.getClientSecret()).isEqualTo("{bcrypt}hashed");
         assertThat(registeredClient.getScopes()).containsExactly("SCORE_READ");
         assertThat(registeredClient.getAuthorizationGrantTypes()).containsExactly(AuthorizationGrantType.CLIENT_CREDENTIALS);
+    }
+
+    @Test
+    void findByClientIdExposesBothSecretsAsTheClientSecretDuringARotationGracePeriod() {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        ReflectionTestUtils.setField(consumer, "id", consumerId);
+        consumer.setOauthClientId("client_abc");
+        consumer.setOauthClientSecretHash("{bcrypt}old");
+        consumer.rotateSecret("{bcrypt}new", Duration.ofHours(24));
+        when(consumerRepository.findByOauthClientId("client_abc")).thenReturn(Optional.of(consumer));
+
+        RegisteredClient registeredClient = repository.findByClientId("client_abc");
+
+        assertThat(registeredClient.getClientSecret())
+                .isEqualTo("{bcrypt}new" + RotatingClientSecretPasswordEncoder.DELIMITER + "{bcrypt}old");
+    }
+
+    @Test
+    void findByClientIdReturnsNullForANullPrimaryHashEvenWithAnOrphanedPreviousHash() {
+        UUID consumerId = UUID.randomUUID();
+        Consumer consumer = Consumer.forOAuth2Client("Acme Lender", "ops@acme.test", Set.of(ConsumerScope.SCORE_READ));
+        ReflectionTestUtils.setField(consumer, "id", consumerId);
+        consumer.setOauthClientId("client_corrupted");
+        // Not reachable via any real write path — regression test for the null-guard
+        // checking getEffectiveOauthClientSecret() rather than getOauthClientSecretHash().
+        ReflectionTestUtils.setField(consumer, "oauthClientSecretHashPrevious", "{bcrypt}orphaned");
+        ReflectionTestUtils.setField(consumer, "oauthClientSecretPreviousExpiresAt",
+                java.time.Instant.now().plusSeconds(3600));
+        when(consumerRepository.findByOauthClientId("client_corrupted")).thenReturn(Optional.of(consumer));
+
+        assertThat(repository.findByClientId("client_corrupted")).isNull();
     }
 
     @Test

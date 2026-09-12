@@ -110,6 +110,18 @@ just future issuance — see [Known limitations](#known-limitations) for exactly
 that does and doesn't cover. `SUSPENDED` can be reversed (`{"status":"ACTIVE"}`);
 `REVOKED` is terminal — no further transition is accepted once a consumer is revoked.
 
+Rotate a client secret without downtime:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/admin/consumers/$CONSUMER_ID/rotate-secret \
+  -H 'X-Platform-Admin-Token: local-dev-admin-token'
+```
+
+Returns a new secret (shown once, same as provisioning). The old secret keeps working
+for `app.oauth2.secret-rotation-grace-period-hours` (default 24h) so deployed clients
+can update on their own schedule — see [Known limitations](#known-limitations) for the
+two-generations-only caveat.
+
 Call any existing endpoint with `Authorization: Bearer <access_token>` instead of
 `X-API-Key` — every scope-based check behaves identically either way. Access tokens
 expire after 1 hour by default (tunable via `app.oauth2.access-token-ttl-minutes`); there
@@ -139,9 +151,13 @@ These are accepted MVP trade-offs, not oversights.
   if a future caller validates these JWTs independently using only `/oauth2/jwks` (a
   gateway, a sidecar, another service), the signature is still valid and nothing there
   consults `consumers.status` — the token would still work there until it expires.
-- **No client-secret rotation flow.** A secret is shown exactly once, at provisioning.
-  Replacing a compromised one means provisioning a new consumer; there is no way to
-  issue a second secret and retire the first without downtime for that client.
+- **Client-secret rotation keeps only two generations, no more.** `POST
+  /api/v1/admin/consumers/{id}/rotate-secret` issues a new secret and keeps the old one
+  working for a grace period (`app.oauth2.secret-rotation-grace-period-hours`, default
+  24h) — deployed clients update on their own schedule without downtime. Rotating again
+  before that grace period ends immediately drops the older secret rather than keeping
+  three generations valid; if you need to rotate twice in quick succession, the first
+  rotation's grace window gets cut short.
 - **No signing-key rotation.** The RSA key is persisted (`oauth2_signing_keys`,
   generated once and reused indefinitely across restarts and instances — see
   `docs/superpowers/specs/2026-09-11-oauth2-persistence-design.md`), which solved the
@@ -178,7 +194,8 @@ mapping, each rule-based scoring rule in isolation, and the OAuth2 auth layer �
 claim customizer/converter's scope-mapping, consumer-lookup and status-enforcement
 logic, `JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adaptation,
 `OAuth2SigningKeyService`'s get-or-create/parse logic, `Consumer`'s status-transition
-rules (including `REVOKED` being terminal), and
+rules (including `REVOKED` being terminal) and secret-rotation grace-period logic,
+`RotatingClientSecretPasswordEncoder`'s composite-secret matching, and
 `AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior.
 
 ## Full containerized run
