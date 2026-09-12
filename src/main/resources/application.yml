@@ -79,16 +79,20 @@ management:
   endpoints:
     web:
       exposure:
-        # Only health — this endpoint is fully unauthenticated (SecurityConfig's
-        # publicFilterChain permits it to anyone), so nothing else in actuator's
-        # surface (env, beans, config props, etc.) should ever be reachable here.
-        include: health
+        # health is fully unauthenticated (SecurityConfig's publicFilterChain permits it
+        # to anyone); prometheus requires PLATFORM_ADMIN_TOKEN (SecurityConfig's
+        # metricsFilterChain). Nothing else in actuator's surface (env, beans, config
+        # props, etc.) should ever be reachable here.
+        include: health,prometheus
   endpoint:
     health:
       # Never show component-level detail (DB connectivity, disk paths) to an
       # anonymous caller. There is no "authorized" caller on this endpoint's security
       # chain to make when-authorized meaningfully different from never.
       show-details: never
+  metrics:
+    tags:
+      application: sme-credit-scoring-platform
 
 springdoc:
   swagger-ui:

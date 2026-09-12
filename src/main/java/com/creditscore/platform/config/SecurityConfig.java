@@ -259,8 +259,32 @@ public class SecurityConfig {
     }
 
     /**
-     * Final fallback chain: {@code @Order(6)} means Spring Security only ever reaches
-     * this for a path that matched none of chains 1-5 above, so it changes nothing for
+     * Metrics are more sensitive than health: request-volume, latency and JVM internals,
+     * not just an up/down bit — so this requires {@code PLATFORM_ADMIN_TOKEN}, the same
+     * as {@link #adminFilterChain}, rather than being public like {@link #publicFilterChain}.
+     */
+    @Bean
+    @Order(6)
+    public SecurityFilterChain metricsFilterChain(HttpSecurity http,
+            @Value("${app.admin.platform-admin-token}") String platformAdminToken) throws Exception {
+        AdminTokenFilter adminTokenFilter = new AdminTokenFilter(platformAdminToken);
+
+        http
+                .securityMatcher("/actuator/prometheus")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(adminTokenFilter, UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> auth.anyRequest().hasAuthority("PLATFORM_ADMIN"))
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(this::unauthorized)
+                        .accessDeniedHandler(this::forbidden));
+
+        return http.build();
+    }
+
+    /**
+     * Final fallback chain: {@code @Order(7)} means Spring Security only ever reaches
+     * this for a path that matched none of chains 1-6 above, so it changes nothing for
      * any path already handled today. It exists because this app has no other
      * default-deny — without it, a path matching no {@code securityMatcher} bypasses
      * Spring Security's filter chain entirely and reaches the servlet layer completely
@@ -303,7 +327,7 @@ public class SecurityConfig {
      * Kept anyway so the first such endpoint doesn't inherit this exact bug.
      */
     @Bean
-    @Order(6)
+    @Order(7)
     public SecurityFilterChain catchAllFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/**")

@@ -219,10 +219,29 @@ docker compose --profile full up --build
 
 The `app` service has a real Docker healthcheck against `GET /actuator/health` (checks
 DB connectivity, returns `503`/`{"status":"DOWN"}` if Postgres is unreachable) —
-`docker ps` reports `healthy`/`unhealthy` accordingly. This is the only actuator
-endpoint exposed (`management.endpoints.web.exposure.include: health` in
-`application.yml`); it returns no component detail (`show-details: never`) since it's
-fully unauthenticated, same as Swagger UI.
+`docker ps` reports `healthy`/`unhealthy` accordingly. It returns no component detail
+(`show-details: never`) since it's fully unauthenticated, same as Swagger UI.
+
+## Metrics
+
+```bash
+curl -H 'X-Platform-Admin-Token: local-dev-admin-token' http://localhost:8080/actuator/prometheus
+```
+
+Prometheus-format text exposition of the JVM, HTTP request, and HikariCP connection-pool
+metrics Micrometer auto-instruments (request counts/latencies per endpoint, memory/GC,
+pool usage, etc.) — no custom business metrics yet. Unlike `/actuator/health`, this
+requires `PLATFORM_ADMIN_TOKEN` (`SecurityConfig`'s `metricsFilterChain`): request
+volume, latency and JVM internals are more sensitive than an up/down bit. A real
+Prometheus scrape config needs to supply that header — either `http_headers` (Prometheus
+2.44+) or a sidecar/proxy that injects it, since the standard `authorization`/
+`bearer_token` scrape options only set the `Authorization` header, not an arbitrary one.
+The unauthenticated `/actuator` index does list `prometheus` in its `_links` (it always
+links whatever's exposed) — that discloses the URL to anyone, not the metrics data, which
+still requires the token.
+`management.endpoints.web.exposure.include` in `application.yml` controls which actuator
+endpoints exist at all (currently `health,prometheus` — nothing else, same reasoning as
+before).
 
 ## Local dev reset
 
