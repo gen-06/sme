@@ -84,6 +84,13 @@ Swagger UI (no auth required): http://localhost:8080/swagger-ui.html
 | GET    | `/api/v1/businesses/{id}/transactions`      | `TRANSACTION_READ`   |
 | GET    | `/api/v1/usage/summary`                     | (none — any authenticated consumer) |
 
+`GET /businesses` and `GET .../transactions` are paginated (`?page=`, `?size=`, `?sort=`)
+and return Spring Data's stable `PagedModel` shape —
+`{"content": [...], "page": {"size", "number", "totalElements", "totalPages"}}` — rather
+than serializing `Page`/`PageImpl` directly, which Spring Data itself warns is not a
+stable format across versions (`@EnableSpringDataWebSupport(pageSerializationMode =
+VIA_DTO)` in `PlatformApplication.java`).
+
 Auth: `X-API-Key: <key>` header, or `Authorization: Bearer <access_token>` — see
 [OAuth2 client-credentials](#oauth2-client-credentials-coexists-with-api-keys) below.
 Every consumer is also rate-limited to `app.rate-limit.requests-per-minute` (default
