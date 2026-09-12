@@ -22,6 +22,15 @@ does *not* do yet.
 
 ## Run it
 
+One-time setup — Postgres's container reads its password from a file, not a plain env
+var (see [Secrets](#secrets) below), so create the local secret files before the first
+`docker compose up`:
+
+```bash
+cp secrets/postgres_password.txt.example secrets/postgres_password.txt
+cp secrets/platform_admin_token.txt.example secrets/platform_admin_token.txt
+```
+
 ```bash
 docker compose up -d postgres
 
@@ -230,6 +239,26 @@ logic, `JpaRegisteredClientRepository`'s `Consumer`-to-`RegisteredClient` adapta
 rules (including `REVOKED` being terminal) and secret-rotation grace-period logic,
 `RotatingClientSecretPasswordEncoder`'s composite-secret matching, and
 `AdminTokenFilter`/`OAuth2UsageMeteringFilter`'s request-level behavior.
+
+## Secrets
+
+Postgres's password and `PLATFORM_ADMIN_TOKEN` are mounted into containers as files
+(Docker Compose's `secrets:`), not plain environment variables — `docker inspect`'s
+`Config.Env` carries neither value in plaintext for either container. The `app`
+service consumes them via Spring Boot's `spring.config.import=optional:configtree:`
+(`application.yml`), which reads each file under `/run/secrets/` as a property named
+after the file (`spring.datasource.password`, `app.admin.platform-admin-token`).
+
+Real values live in `secrets/*.txt`, gitignored; only `secrets/*.txt.example` (today's
+same dev-only placeholders) are committed — see the one-time setup step above. This
+covers deployment-time secrets only; it's unrelated to the OAuth2 signing
+key/issued-tokens-in-plaintext-in-Postgres concern in
+[Known limitations](#known-limitations), which is a data-at-rest question, not a
+deployment-secrets one.
+
+Plain `./mvnw spring-boot:run` (no Docker) is unaffected: `optional:` makes the
+config-tree import a silent no-op when `/run/secrets/` doesn't exist, so local dev
+keeps using `application.yml`'s literal defaults exactly as before.
 
 ## Full containerized run
 

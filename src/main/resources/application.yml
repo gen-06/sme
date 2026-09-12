@@ -2,6 +2,14 @@ spring:
   application:
     name: sme-credit-scoring-platform
 
+  # Docker/Kubernetes-secret idiom: each file under /run/secrets/ becomes a property
+  # (filename -> dotted key, content -> value), overriding whatever's set below.
+  # "optional:" makes this a silent no-op when the directory doesn't exist, so plain
+  # ./mvnw spring-boot:run (no Docker) is unaffected and keeps using the literal
+  # defaults in this file — see docker-compose.yml's secrets: block and README.
+  config:
+    import: "optional:configtree:/run/secrets/"
+
   autoconfigure:
     exclude:
       # We authenticate via ApiKeyAuthFilter, not Spring Security's default

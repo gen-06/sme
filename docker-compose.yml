@@ -5,7 +5,11 @@ services:
     environment:
       POSTGRES_DB: credit_scoring
       POSTGRES_USER: credit_scoring
-      POSTGRES_PASSWORD: credit_scoring_dev
+      # The official Postgres image's entrypoint natively supports the _FILE suffix:
+      # it reads the password from this file instead of taking it as a plain env var.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     ports:
       - "5432:5432"
     volumes:
@@ -34,9 +38,17 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/credit_scoring
       SPRING_DATASOURCE_USERNAME: credit_scoring
-      SPRING_DATASOURCE_PASSWORD: credit_scoring_dev
       SPRING_PROFILES_ACTIVE: seed
-      PLATFORM_ADMIN_TOKEN: local-dev-admin-token
+    # Mounted as files under /run/secrets/, one per line below, named after the exact
+    # dotted Spring property they set — application.yml's
+    # spring.config.import=optional:configtree:/run/secrets/ reads each file's name as
+    # a property key and its content as the value. Neither secret is a plain env var
+    # inside this container (docker inspect's Config.Env carries no plaintext value).
+    secrets:
+      - source: postgres_password
+        target: spring.datasource.password
+      - source: platform_admin_token
+        target: app.admin.platform-admin-token
     ports:
       - "8080:8080"
     healthcheck:
@@ -49,3 +61,15 @@ services:
 
 volumes:
   postgres-data:
+
+# Local file-based secrets (see secrets/*.txt.example) — the same idiom Docker Swarm
+# and Kubernetes both use (a secret mounted as a file), so this carries forward
+# unchanged if this app is ever deployed to either. Real values live in secrets/*.txt,
+# gitignored; the committed *.example templates hold today's same dev-only
+# placeholders so a fresh clone's local workflow needs only a one-time copy step (see
+# README) and otherwise behaves exactly as before.
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  platform_admin_token:
+    file: ./secrets/platform_admin_token.txt
