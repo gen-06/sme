@@ -1,5 +1,7 @@
 # SME Credit-Scoring Platform
 
+[![CI](https://github.com/gen-06/sme/actions/workflows/ci.yml/badge.svg)](https://github.com/gen-06/sme/actions/workflows/ci.yml)
+
 Global SME credit-scoring infrastructure: aggregates alternative data (mobile money,
 e-commerce, accounting software, POS) for small/medium businesses in emerging markets
 and turns it into a standardized creditworthiness signal, served to lenders/fintechs
