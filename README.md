@@ -280,6 +280,15 @@ DB connectivity, returns `503`/`{"status":"DOWN"}` if Postgres is unreachable) �
 `docker ps` reports `healthy`/`unhealthy` accordingly. It returns no component detail
 (`show-details: never`) since it's fully unauthenticated, same as Swagger UI.
 
+On `docker stop`/a restart, the app shuts down gracefully: it stops accepting new
+requests but lets in-flight ones finish, up to `spring.lifecycle.timeout-per-shutdown-phase`
+(20s, in `application.yml`) — verified live (`"Commencing graceful shutdown"` /
+`"Graceful shutdown complete"` in the logs, stop completing well inside the grace
+period). `stop_grace_period: 25s` here in `docker-compose.yml` deliberately gives
+Docker's own kill timer 5s more than that 20s, so Spring's own timeout is what fires,
+not Docker's `SIGKILL` cutting it off first — the two numbers are coupled; changing one
+without the other silently reintroduces the cutoff.
+
 ## Metrics
 
 ```bash

@@ -40,6 +40,19 @@ spring:
     job:
       enabled: false
 
+  lifecycle:
+    # How long Tomcat waits for in-flight requests to finish on SIGTERM before giving
+    # up (server.shutdown: graceful, below, is what enables the wait at all). Must stay
+    # under docker-compose.yml's app service's stop_grace_period (25s) — otherwise
+    # Docker's SIGKILL fires first and this timeout never gets to matter.
+    timeout-per-shutdown-phase: 20s
+
+# Graceful: on SIGTERM, stop accepting new requests but let in-flight ones finish
+# (bounded by spring.lifecycle.timeout-per-shutdown-phase above) instead of dropping
+# them mid-response.
+server:
+  shutdown: graceful
+
 app:
   ingestion:
     mock-mobile-money:

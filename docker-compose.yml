@@ -57,6 +57,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # 5s of headroom beyond application.yml's timeout-per-shutdown-phase (20s), so
+    # Spring's own graceful-shutdown timeout is what fires on `docker stop`/a restart,
+    # not Docker's SIGKILL cutting it off first (Docker's own default is only 10s).
+    stop_grace_period: 25s
     profiles: ["full"]
 
 volumes:
