@@ -64,7 +64,20 @@ public class SyncReconciliationJobConfig {
                 .build();
     }
 
-    @Bean
+    /**
+     * {@code destroyMethod = ""} disables Spring's inferred-destroy-method behavior,
+     * which auto-detects any public no-arg {@code close()} method on a {@code @Bean}
+     * and calls it at container shutdown. {@code JpaPagingItemReader} has one (from
+     * {@code ItemStream}), but its open/close lifecycle is already owned by the
+     * {@code Step} this reader is wired into, not the container. Without this, a clean
+     * shutdown before the scheduled job has ever run in this process calls
+     * {@code close()} on a reader whose {@code entityManager} field is still null
+     * (only set by {@code open()}, which only runs as part of a real step execution) —
+     * {@code JpaPagingItemReader.doClose()} calls {@code entityManager.close()}
+     * unconditionally, so that NPE surfaces as {@code ItemStreamException("Error while
+     * closing item reader")} on every shutdown that hasn't run the job yet.
+     */
+    @Bean(destroyMethod = "")
     public JpaPagingItemReader<DataSource> connectedDataSourceReader(EntityManagerFactory entityManagerFactory) {
         return new JpaPagingItemReaderBuilder<DataSource>()
                 .name("connectedDataSourceReader")
