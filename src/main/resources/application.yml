@@ -21,6 +21,24 @@ spring:
     url: jdbc:postgresql://localhost:5432/credit_scoring
     username: credit_scoring
     password: credit_scoring_dev
+    hikari:
+      pool-name: credit-scoring-pool
+      # Load-independent safety net, not a load-tuning guess: WARNs with a stack trace
+      # if a connection is checked out longer than this without being returned — how
+      # you catch a real connection leak before it silently exhausts the pool.
+      leak-detection-threshold: 30000
+      # Down from Hikari's own 30s default: a caller waiting for a pooled connection
+      # should fail fast with a clear error under contention, not hang for 30 seconds
+      # to find out the pool is exhausted.
+      connection-timeout: 10000
+      # Explicit rather than left as an implicit default (both already equal 10 by
+      # default) so the reasoning is documented: Postgres's own max_connections
+      # default is 100 (confirmed live, no pooler in front), so this budgets roughly
+      # 9 app instances at this size before contention, leaving headroom for
+      # admin/psql access. NOT load-tested — a real deployment with known traffic
+      # should retune this, not treat 10 as validated for production load.
+      maximum-pool-size: 10
+      minimum-idle: 10
 
   jpa:
     hibernate:

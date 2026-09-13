@@ -310,6 +310,26 @@ still requires the token.
 endpoints exist at all (currently `health,prometheus` — nothing else, same reasoning as
 before).
 
+## Connection pool
+
+`spring.datasource.hikari` in `application.yml` sets two load-independent safety nets
+regardless of actual traffic: `leak-detection-threshold: 30000` (WARNs with a stack
+trace if a connection is held longer than 30s without being returned — how a real
+connection leak from a long-lived holder, like a stuck batch job or scheduled task, gets
+caught before it silently exhausts the pool; a request-path connection leak on a
+gracefully-shutting-down instance won't reach this threshold, since Tomcat's own 20s
+drain timeout and Docker's 25s hard stop both fire first) and `connection-timeout: 10000`
+(down from HikariCP's own 30s default, so a caller waiting for a pooled connection under
+contention fails fast with a clear error instead of hanging).
+
+`maximum-pool-size`/`minimum-idle` are both set to `10` — HikariCP's own default, but
+made explicit so the reasoning is documented: Postgres's own `max_connections` default
+is `100` (confirmed live, no PgBouncer or other pooler in front), so this budgets
+roughly 9 app instances at this size before contention, leaving headroom for
+admin/psql access. **This has not been load-tested** — it's a reasoned starting budget,
+not a validated production number. A real deployment with known traffic characteristics
+should retune pool size deliberately rather than treat `10` as already correct.
+
 ## Logging
 
 Console output is structured JSON, one object per line (`logback-spring.xml`, via
